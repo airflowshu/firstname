@@ -1,0 +1,182 @@
+'use client';
+
+import { Empty, Spin } from 'antd';
+import { useEffect, useRef, useState } from 'react';
+import type { GraphData } from '@/lib/types';
+
+function formatEdgeLabel(edge: GraphData['edges'][number]) {
+  if (edge.type === 'marriage') {
+    return '配偶';
+  }
+
+  return edge.label;
+}
+
+export function GraphViewer({
+  data,
+  loading,
+  onNodeClick,
+}: {
+  data?: GraphData;
+  loading?: boolean;
+  onNodeClick?: (id: string) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!data || !containerRef.current) {
+      return;
+    }
+
+    let destroyed = false;
+    let graph: {
+      destroy?: () => void;
+      render?: () => Promise<void>;
+      fitView?: () => void;
+      on?: (name: string, cb: (event: unknown) => void) => void;
+    } | null = null;
+
+    const renderGraph = async () => {
+      try {
+        const { Graph } = await import('@antv/g6');
+        if (destroyed || !containerRef.current) {
+          return;
+        }
+
+        graph = new Graph({
+          container: containerRef.current,
+          autoResize: true,
+          data: {
+            nodes: data.nodes.map((node) => {
+              const isDeceased = node.lifeStatus === 'DECEASED';
+
+              return {
+                id: node.id,
+                style: {
+                  labelText: node.label,
+                  size: node.isCenter ? 72 : 52,
+                  fill: isDeceased
+                    ? node.isCenter
+                      ? '#6f6f6f'
+                      : '#8e8e8e'
+                    : node.isCenter
+                      ? '#7b1f1f'
+                      : node.gender === 'MALE'
+                        ? '#4c78a8'
+                        : '#d66a7b',
+                  stroke: isDeceased ? '#e3ddd3' : '#f3e6d0',
+                  lineWidth: node.isCenter ? 4 : 2,
+                  labelFill: '#fffaf0',
+                  labelFontSize: node.isCenter ? 16 : 13,
+                  labelFontWeight: 700,
+                  labelLineWidth: 4,
+                  labelStroke: 'rgba(48, 32, 18, 0.38)',
+                  labelPlacement: 'center',
+                  labelOffsetX: 0,
+                  labelOffsetY: 0,
+                  labelMaxWidth: '78%',
+                  labelWordWrap: true,
+                  labelTextAlign: 'center',
+                  labelTextBaseline: 'middle',
+                },
+              };
+            }),
+            edges: data.edges.map((edge) => {
+              const isMarriage = edge.type === 'marriage';
+              const isSibling = edge.type === 'sibling';
+
+              return {
+                id: edge.id,
+                source: edge.source,
+                target: edge.target,
+                type: isMarriage ? 'line' : 'quadratic',
+                style: {
+                  labelText: formatEdgeLabel(edge),
+                  labelBackground: true,
+                  stroke: '#c7ae87',
+                  lineWidth: isMarriage ? 2.5 : 1.5,
+                  curveOffset: isSibling ? 22 : isMarriage ? 0 : 10,
+                  endArrow: !isMarriage,
+                  startArrow: isMarriage,
+                  endArrowFill: '#8a704f',
+                  startArrowFill: '#8a704f',
+                  labelFill: '#5a3d28',
+                  labelBackgroundFill: 'rgba(255, 248, 236, 0.9)',
+                  labelBackgroundRadius: 6,
+                  labelBackgroundPadding: [3, 6, 3, 6],
+                  labelFontSize: 12,
+                  labelFontWeight: 700,
+                  labelPlacement: 'center',
+                  labelOffsetX: 0,
+                  labelOffsetY: isMarriage ? -12 : isSibling ? 12 : -8,
+                  labelAutoRotate: false,
+                },
+              };
+            }),
+          },
+          layout: {
+            type: 'force',
+            preventOverlap: true,
+            linkDistance: 150,
+          },
+          behaviors: ['drag-canvas', 'zoom-canvas', 'drag-element'],
+        } as never);
+
+        graph.on?.('node:click', (event: unknown) => {
+          const payload = event as {
+            data?: { target?: { id?: string }; data?: { id?: string } };
+            target?: { id?: string; attributes?: { id?: string } };
+          };
+          const nodeId =
+            payload.data?.data?.id ??
+            payload.data?.target?.id ??
+            payload.target?.id ??
+            payload.target?.attributes?.id;
+
+          if (nodeId) {
+            onNodeClick?.(nodeId);
+          }
+        });
+
+        await graph.render?.();
+        graph.fitView?.();
+      } catch (renderError) {
+        setError(renderError instanceof Error ? renderError.message : '图谱渲染失败');
+      }
+    };
+
+    void renderGraph();
+
+    return () => {
+      destroyed = true;
+      graph?.destroy?.();
+    };
+  }, [data, onNodeClick]);
+
+  if (loading) {
+    return (
+      <div className="page-center graph-panel">
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="graph-panel page-center">
+        <Empty description={error} />
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="graph-panel page-center">
+        <Empty description="请选择一个成员开始浏览关系图谱" />
+      </div>
+    );
+  }
+
+  return <div ref={containerRef} className="graph-panel" />;
+}

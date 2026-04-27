@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  VIEWER
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  UNKNOWN
+}
+
+enum LifeStatus {
+  ALIVE
+  DECEASED
+  UNKNOWN
+}
+
+enum MarriageStatus {
+  ACTIVE
+  DIVORCED
+  WIDOWED
+}
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  CREATE
+  UPDATE
+  DELETE
+  RESTORE
+  EXPORT
+  UPLOAD_PHOTO
+  ROLE_CHANGE
+}
+
+model User {
+  id           String      @id @default(cuid())
+  username     String      @unique
+  passwordHash String
+  role         UserRole    @default(VIEWER)
+  status       UserStatus  @default(ACTIVE)
+  lastLoginAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  auditLogs    AuditLog[]
+}
+
+model Member {
+  id                String        @id @default(cuid())
+  name              String
+  gender            Gender        @default(UNKNOWN)
+  birthDate         DateTime?
+  deathDate         DateTime?
+  lifeStatus        LifeStatus    @default(ALIVE)
+  photoPath         String?
+  generationName    String?
+  birthOrder        Int?
+  nativePlace       String?
+  fatherId          String?
+  motherId          String?
+  notes             String?
+  isDeleted         Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  father            Member?       @relation("FatherChildren", fields: [fatherId], references: [id], onDelete: SetNull)
+  mother            Member?       @relation("MotherChildren", fields: [motherId], references: [id], onDelete: SetNull)
+  fatherChildren    Member[]      @relation("FatherChildren")
+  motherChildren    Member[]      @relation("MotherChildren")
+  marriagesAsMember Marriage[]    @relation("MarriageMember")
+  marriagesAsSpouse Marriage[]    @relation("MarriageSpouse")
+
+  @@index([name])
+  @@index([fatherId])
+  @@index([motherId])
+  @@index([isDeleted])
+}
+
+model Marriage {
+  id        String         @id @default(cuid())
+  pairKey   String         @unique
+  memberId  String
+  spouseId  String
+  status    MarriageStatus @default(ACTIVE)
+  startDate DateTime?
+  endDate   DateTime?
+  isDeleted Boolean        @default(false)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  member    Member         @relation("MarriageMember", fields: [memberId], references: [id], onDelete: Cascade)
+  spouse    Member         @relation("MarriageSpouse", fields: [spouseId], references: [id], onDelete: Cascade)
+
+  @@index([memberId])
+  @@index([spouseId])
+  @@index([isDeleted])
+}
+
+model KinshipAlias {
+  id           String   @id @default(cuid())
+  relationCode String   @unique
+  standardTerm String
+  familyAlias  String
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([enabled])
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  operatorId String?
+  action     AuditAction
+  targetType String
+  targetId   String?
+  before     Json?
+  after      Json?
+  metadata   Json?
+  createdAt  DateTime    @default(now())
+  operator   User?       @relation(fields: [operatorId], references: [id], onDelete: SetNull)
+
+  @@index([operatorId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}

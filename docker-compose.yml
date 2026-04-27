@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fisrtname-postgres
+    environment:
+      POSTGRES_DB: fisrtname
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d fisrtname']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: fisrtname-api
+    environment:
+      API_PORT: 3001
+      JWT_SECRET: please_change_me
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/fisrtname?schema=public
+      UPLOAD_DIR: /app/uploads
+      CORS_ORIGIN: http://localhost
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./uploads:/app/uploads
+    ports:
+      - '3001:3001'
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost/api
+    container_name: fisrtname-web
+    depends_on:
+      - api
+    ports:
+      - '3000:3000'
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: fisrtname-nginx
+    depends_on:
+      - web
+      - api
+    ports:
+      - '80:80'
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  postgres_data:
