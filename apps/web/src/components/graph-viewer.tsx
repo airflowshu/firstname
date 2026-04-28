@@ -16,10 +16,16 @@ export function GraphViewer({
   data,
   loading,
   onNodeClick,
+  highlightedNodeIds = [],
+  highlightedEdgeIds = [],
+  targetNodeId,
 }: {
   data?: GraphData;
   loading?: boolean;
   onNodeClick?: (id: string) => void;
+  highlightedNodeIds?: string[];
+  highlightedEdgeIds?: string[];
+  targetNodeId?: string;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +56,9 @@ export function GraphViewer({
           data: {
             nodes: data.nodes.map((node) => {
               const isDeceased = node.lifeStatus === 'DECEASED';
+              const isPathNode = highlightedNodeIds.includes(node.id);
+              const isTargetNode = targetNodeId === node.id;
+              const isSpecialNode = isPathNode || isTargetNode;
 
               return {
                 id: node.id,
@@ -62,15 +71,17 @@ export function GraphViewer({
                       : '#8e8e8e'
                     : node.isCenter
                       ? '#7b1f1f'
+                      : isTargetNode
+                        ? '#0f766e'
                       : node.gender === 'MALE'
                         ? '#4c78a8'
                         : '#d66a7b',
-                  stroke: isDeceased ? '#e3ddd3' : '#f3e6d0',
-                  lineWidth: node.isCenter ? 4 : 2,
+                  stroke: isPathNode ? '#fbbf24' : isDeceased ? '#e3ddd3' : '#f3e6d0',
+                  lineWidth: node.isCenter ? 4 : isSpecialNode ? 4 : 2,
                   labelFill: '#fffaf0',
-                  labelFontSize: node.isCenter ? 16 : 13,
+                  labelFontSize: node.isCenter ? 16 : isSpecialNode ? 14 : 13,
                   labelFontWeight: 700,
-                  labelLineWidth: 4,
+                  labelLineWidth: isSpecialNode ? 5 : 4,
                   labelStroke: 'rgba(48, 32, 18, 0.38)',
                   labelPlacement: 'center',
                   labelOffsetX: 0,
@@ -85,6 +96,7 @@ export function GraphViewer({
             edges: data.edges.map((edge) => {
               const isMarriage = edge.type === 'marriage';
               const isSibling = edge.type === 'sibling';
+              const isHighlighted = highlightedEdgeIds.includes(edge.id);
 
               return {
                 id: edge.id,
@@ -94,15 +106,17 @@ export function GraphViewer({
                 style: {
                   labelText: formatEdgeLabel(edge),
                   labelBackground: true,
-                  stroke: '#c7ae87',
-                  lineWidth: isMarriage ? 2.5 : 1.5,
+                  stroke: isHighlighted ? '#b45309' : '#c7ae87',
+                  lineWidth: isHighlighted ? 3.5 : isMarriage ? 2.5 : 1.5,
                   curveOffset: isSibling ? 22 : isMarriage ? 0 : 10,
                   endArrow: !isMarriage,
                   startArrow: isMarriage,
-                  endArrowFill: '#8a704f',
-                  startArrowFill: '#8a704f',
-                  labelFill: '#5a3d28',
-                  labelBackgroundFill: 'rgba(255, 248, 236, 0.9)',
+                  endArrowFill: isHighlighted ? '#b45309' : '#8a704f',
+                  startArrowFill: isHighlighted ? '#b45309' : '#8a704f',
+                  labelFill: isHighlighted ? '#7c2d12' : '#5a3d28',
+                  labelBackgroundFill: isHighlighted
+                    ? 'rgba(255, 247, 213, 0.96)'
+                    : 'rgba(255, 248, 236, 0.9)',
                   labelBackgroundRadius: 6,
                   labelBackgroundPadding: [3, 6, 3, 6],
                   labelFontSize: 12,
@@ -152,7 +166,7 @@ export function GraphViewer({
       destroyed = true;
       graph?.destroy?.();
     };
-  }, [data, onNodeClick]);
+  }, [data, highlightedEdgeIds, highlightedNodeIds, onNodeClick, targetNodeId]);
 
   if (loading) {
     return (

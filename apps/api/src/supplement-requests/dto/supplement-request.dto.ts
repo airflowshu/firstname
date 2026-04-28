@@ -1,0 +1,127 @@
+import { PartialType } from '@nestjs/mapped-types';
+import {
+  Gender,
+  LifeStatus,
+  MemberAssetCategory,
+  SupplementRequestStatus,
+  SupplementRequestType,
+} from '@prisma/client';
+import { Type } from 'class-transformer';
+import {
+  IsDateString,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+
+export class SupplementMemberPatchDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  name?: string;
+
+  @IsOptional()
+  @IsEnum(Gender)
+  gender?: Gender;
+
+  @IsOptional()
+  @IsDateString()
+  birthDate?: string;
+
+  @IsOptional()
+  @IsDateString()
+  deathDate?: string;
+
+  @IsOptional()
+  @IsEnum(LifeStatus)
+  lifeStatus?: LifeStatus;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  generationName?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  birthOrder?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  nativePlace?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
+}
+
+export class CreateSupplementRequestDto {
+  @IsString()
+  memberId!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  reason?: string;
+
+  @ValidateNested()
+  @Type(() => SupplementMemberPatchDto)
+  patch!: SupplementMemberPatchDto;
+}
+
+export class ReviewSupplementRequestDto {
+  @IsIn(['APPROVE', 'REJECT'])
+  action!: 'APPROVE' | 'REJECT';
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  reviewComment?: string;
+}
+
+export class CreateSupplementAssetRequestDto {
+  @IsString()
+  memberId!: string;
+
+  @IsEnum(MemberAssetCategory)
+  category!: MemberAssetCategory;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  reason?: string;
+}
+
+export class SupplementRequestQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  pageSize?: number = 10;
+
+  @IsOptional()
+  @IsEnum(SupplementRequestStatus)
+  status?: SupplementRequestStatus;
+
+  @IsOptional()
+  @IsString()
+  keyword?: string;
+
+  @IsOptional()
+  @IsEnum(SupplementRequestType)
+  requestType?: SupplementRequestType;
+}

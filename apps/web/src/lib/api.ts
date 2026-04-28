@@ -4,10 +4,15 @@ import type {
   AuditLogRecord,
   AuthUser,
   DashboardSummary,
+  DuplicateMemberCheckResult,
   GraphData,
   KinshipAlias,
   KinshipResult,
   MemberDetail,
+  MemberAssetRecord,
+  MemberTimelineEvent,
+  MemberImportResult,
+  SupplementRequestRecord,
   MemberKinshipResponse,
   MemberOption,
   MembersResponse,
@@ -111,10 +116,96 @@ export const api = {
     return request<MembersResponse>(`/members?${search.toString()}`);
   },
   getMember: (id: string) => request<MemberDetail>(`/members/${id}`),
+  getMemberTimeline: (memberId: string) =>
+    request<MemberTimelineEvent[]>(`/members/${memberId}/timeline`),
+  getMemberAssets: (memberId: string, category?: 'PHOTO' | 'DOCUMENT') =>
+    request<MemberAssetRecord[]>(
+      `/members/${memberId}/assets${category ? `?category=${category}` : ''}`,
+    ),
   getMemberOptions: (keyword?: string) =>
     request<MemberOption[]>(
       `/members/options${keyword ? `?keyword=${encodeURIComponent(keyword)}` : ''}`,
     ),
+  checkMemberDuplicates: (payload: unknown) =>
+    request<DuplicateMemberCheckResult>('/members/duplicate-check', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  createQuickRelative: (
+    memberId: string,
+    payload: {
+      relationType: 'father' | 'mother' | 'spouse' | 'child' | 'sibling';
+      member: Record<string, unknown>;
+    },
+  ) =>
+    request<MemberDetail>(`/members/${memberId}/quick-relatives`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getSupplementRequests: (params: Record<string, string | number | undefined>) => {
+    const search = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') {
+        search.set(key, String(value));
+      }
+    });
+
+    return request<{
+      total: number;
+      page: number;
+      pageSize: number;
+      data: SupplementRequestRecord[];
+    }>(`/supplement-requests?${search.toString()}`);
+  },
+  createSupplementRequest: (payload: unknown) =>
+    request<SupplementRequestRecord>('/supplement-requests', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  createSupplementAssetRequest: (
+    payload: {
+      memberId: string;
+      category: 'PHOTO' | 'DOCUMENT';
+      reason?: string;
+    },
+    files: File[],
+  ) => {
+    const formData = new FormData();
+    formData.append('memberId', payload.memberId);
+    formData.append('category', payload.category);
+    if (payload.reason) {
+      formData.append('reason', payload.reason);
+    }
+    files.forEach((file) => {
+      formData.append('files', file);
+    });
+
+    return request<SupplementRequestRecord>('/supplement-requests/assets', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+  reviewSupplementRequest: (
+    id: string,
+    payload: { action: 'APPROVE' | 'REJECT'; reviewComment?: string },
+  ) =>
+    request<SupplementRequestRecord>(`/supplement-requests/${id}/review`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  downloadMemberImportTemplate: () =>
+    request<Blob>('/members/import-template', {
+      responseType: 'blob',
+    }),
+  importMembers: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return request<MemberImportResult>('/members/import', {
+      method: 'POST',
+      body: formData,
+    });
+  },
   createMember: (payload: unknown) =>
     request<MemberDetail>('/members', {
       method: 'POST',
@@ -142,6 +233,41 @@ export const api = {
       body: formData,
     });
   },
+  uploadMemberAssets: (id: string, category: 'PHOTO' | 'DOCUMENT', files: File[]) => {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append('files', file);
+    });
+
+    return request<MemberAssetRecord[]>(
+      `/members/${id}/assets/${category === 'PHOTO' ? 'photos' : 'documents'}`,
+      {
+        method: 'POST',
+        body: formData,
+      },
+    );
+  },
+  createMemberEvent: (
+    memberId: string,
+    payload: {
+      eventType: MemberTimelineEvent['eventType'];
+      title: string;
+      description?: string;
+      eventDate: string;
+    },
+  ) =>
+    request<MemberTimelineEvent>(`/members/${memberId}/events`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  deleteMemberEvent: (memberId: string, eventId: string) =>
+    request<{ success: boolean }>(`/members/${memberId}/events/${eventId}`, {
+      method: 'DELETE',
+    }),
+  deleteMemberAsset: (memberId: string, assetId: string) =>
+    request<{ success: boolean }>(`/members/${memberId}/assets/${assetId}`, {
+      method: 'DELETE',
+    }),
   createMarriage: (memberId: string, payload: unknown) =>
     request(`/members/${memberId}/marriages`, {
       method: 'POST',

@@ -5,6 +5,7 @@ import {
   NodeIndexOutlined,
   ProfileOutlined,
   SettingOutlined,
+  SnippetsOutlined,
   TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons';
@@ -17,6 +18,7 @@ export const appMenus = [
   { key: '/members', icon: TeamOutlined, label: '成员管理' },
   { key: '/graph', icon: NodeIndexOutlined, label: '关系图谱' },
   { key: '/kinship', icon: ApartmentOutlined, label: '称呼计算' },
+  { key: '/supplement-requests', icon: SnippetsOutlined, label: '资料补充' },
   { key: '/changelog', icon: ProfileOutlined, label: '版本更新日志' },
   { key: '/users', icon: UserOutlined, label: '用户权限', adminOnly: true },
   { key: '/audit-logs', icon: AuditOutlined, label: '操作日志', adminOnly: true },

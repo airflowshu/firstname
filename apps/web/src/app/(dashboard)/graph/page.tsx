@@ -1,17 +1,40 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { Card, Col, Row, Space, Tag, Typography } from 'antd';
-import { useEffect, useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { App, Button, Card, Col, Row, Space, Tag, Typography } from 'antd';
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 import { AuthGuard } from '@/components/auth-guard';
 import { GraphViewer } from '@/components/graph-viewer';
 import { RemoteMemberSelect } from '@/components/remote-member-select';
-import { api } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
+import type { MemberKinshipResponse } from '@/lib/types';
 
 const { Paragraph, Text, Title } = Typography;
 
 export default function GraphPage() {
+  const { message } = App.useApp();
   const [centerId, setCenterId] = useState<string>();
+  const [compareId, setCompareId] = useState<string>();
+  const [relationResult, setRelationResult] = useState<MemberKinshipResponse>();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const initialCenterId = params.get('memberId') ?? undefined;
+    const initialCompareId = params.get('compareId') ?? undefined;
+
+    if (initialCenterId) {
+      setCenterId((current) => current ?? initialCenterId);
+    }
+
+    if (initialCompareId) {
+      setCompareId((current) => current ?? initialCompareId);
+    }
+  }, []);
 
   useEffect(() => {
     if (centerId) {
@@ -25,13 +48,35 @@ export default function GraphPage() {
     });
   }, [centerId]);
 
+  const memberCalcMutation = useMutation({
+    mutationFn: () =>
+      api.calcMemberKinship({ sourceMemberId: centerId!, targetMemberId: compareId! }),
+    onSuccess: (result) => setRelationResult(result),
+    onError: (error) =>
+      message.error(error instanceof ApiError ? error.message : '关系路径计算失败'),
+  });
+
+  const graphDepth = useMemo(() => {
+    const pathLength = relationResult?.sourceToTarget.pathIds?.length ?? 0;
+    return Math.max(2, Math.min(6, pathLength > 0 ? pathLength - 1 : 2));
+  }, [relationResult]);
+
   const graphQuery = useQuery({
-    queryKey: ['graph', centerId],
-    queryFn: () => api.getGraph(centerId!, 2),
+    queryKey: ['graph', centerId, graphDepth],
+    queryFn: () => api.getGraph(centerId!, graphDepth),
     enabled: Boolean(centerId),
   });
 
   const centerNode = graphQuery.data?.nodes.find((node) => node.isCenter);
+  const highlightedNodeIds = relationResult?.sourceToTarget.pathIds ?? [];
+  const highlightedEdgeIds = useMemo(() => {
+    const pathIds = relationResult?.sourceToTarget.pathIds ?? [];
+
+    return pathIds.slice(0, -1).map((sourceId, index) => {
+      const targetId = pathIds[index + 1];
+      return [sourceId, targetId].sort().join(':');
+    });
+  }, [relationResult]);
 
   return (
     <AuthGuard>
@@ -49,11 +94,50 @@ export default function GraphPage() {
               </Space>
             </Col>
             <Col xs={24} lg={12}>
-              <RemoteMemberSelect
-                value={centerId}
-                placeholder="搜索成员并切换图谱中心"
-                onChange={(value) => setCenterId(value)}
-              />
+              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                <RemoteMemberSelect
+                  value={centerId}
+                  placeholder="选择图谱中心成员"
+                  onChange={(value) => {
+                    setCenterId(value);
+                    setRelationResult(undefined);
+                  }}
+                />
+                <RemoteMemberSelect
+                  value={compareId}
+                  placeholder="选择第二成员并高亮最短关系路径"
+                  disabledIds={centerId ? [centerId] : []}
+                  onChange={(value) => {
+                    setCompareId(value);
+                    setRelationResult(undefined);
+                  }}
+                />
+                <Space wrap>
+                  <Button
+                    type="primary"
+                    disabled={!centerId || !compareId}
+                    loading={memberCalcMutation.isPending}
+                    onClick={() => {
+                      if (!centerId || !compareId) {
+                        message.warning('请先选择两位成员后再计算关系路径');
+                        return;
+                      }
+
+                      memberCalcMutation.mutate();
+                    }}
+                  >
+                    高亮关系路径
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setCompareId(undefined);
+                      setRelationResult(undefined);
+                    }}
+                  >
+                    清除路径
+                  </Button>
+                </Space>
+              </Space>
             </Col>
           </Row>
         </Card>
@@ -63,7 +147,13 @@ export default function GraphPage() {
             <GraphViewer
               data={graphQuery.data}
               loading={graphQuery.isLoading}
-              onNodeClick={(id) => setCenterId(id)}
+              highlightedNodeIds={highlightedNodeIds}
+              highlightedEdgeIds={highlightedEdgeIds}
+              targetNodeId={compareId}
+              onNodeClick={(id) => {
+                setCenterId(id);
+                setRelationResult(undefined);
+              }}
             />
           </Col>
           <Col xs={24} xl={7}>
@@ -107,6 +197,35 @@ export default function GraphPage() {
                       已渲染节点 {graphQuery.data?.nodes.length ?? 0} 个，边{' '}
                       {graphQuery.data?.edges.length ?? 0} 条
                     </Text>
+                    {relationResult ? (
+                      <>
+                        <div className="graph-summary-divider" />
+                        <Text strong className="graph-summary-title">
+                          路径关系结果
+                        </Text>
+                        <Text className="graph-summary-meta">
+                          {relationResult.source.name} 如何称呼 {relationResult.target.name}：
+                          {relationResult.sourceToTarget.displayTerm}
+                        </Text>
+                        <Text className="graph-summary-meta">
+                          {relationResult.target.name} 如何称呼 {relationResult.source.name}：
+                          {relationResult.targetToSource.displayTerm}
+                        </Text>
+                        <Text className="graph-summary-meta">
+                          关系路径：{relationResult.sourceToTarget.chainText}
+                        </Text>
+                        <Text className="graph-summary-stat">
+                          已高亮 {relationResult.sourceToTarget.pathIds?.length ?? 0} 个路径节点
+                        </Text>
+                        <Button type="link" style={{ padding: 0 }}>
+                          <Link
+                            href={`/kinship?left=${relationResult.source.id}&right=${relationResult.target.id}`}
+                          >
+                            去称呼计算页查看完整结果
+                          </Link>
+                        </Button>
+                      </>
+                    ) : null}
                   </>
                 ) : (
                   <Text className="graph-summary-meta">

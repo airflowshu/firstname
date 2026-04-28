@@ -57,6 +57,10 @@ model User {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   auditLogs    AuditLog[]
+  submittedSupplementRequests SupplementRequest[] @relation("SupplementRequester")
+  reviewedSupplementRequests  SupplementRequest[] @relation("SupplementReviewer")
+  uploadedMemberAssets        MemberAsset[]
+  createdMemberEvents         MemberEvent[]
 }
 
 model Member {
@@ -82,11 +86,129 @@ model Member {
   motherChildren    Member[]      @relation("MotherChildren")
   marriagesAsMember Marriage[]    @relation("MarriageMember")
   marriagesAsSpouse Marriage[]    @relation("MarriageSpouse")
+  supplementRequests SupplementRequest[]
+  assets            MemberAsset[]
+  events            MemberEvent[]
 
   @@index([name])
   @@index([fatherId])
   @@index([motherId])
   @@index([isDeleted])
+}
+
+enum MemberEventType {
+  BIRTH
+  MARRIAGE
+  DIVORCE
+  DEATH
+  MOVE
+  CAREER
+  HONOR
+  STORY
+  OTHER
+}
+
+model MemberEvent {
+  id          String          @id @default(cuid())
+  memberId     String
+  createdById  String?
+  eventType    MemberEventType
+  title        String
+  description  String?
+  eventDate    DateTime
+  isDeleted    Boolean         @default(false)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  member       Member          @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  createdBy    User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([memberId])
+  @@index([createdById])
+  @@index([eventType])
+  @@index([eventDate])
+  @@index([isDeleted])
+}
+
+enum MemberAssetCategory {
+  PHOTO
+  DOCUMENT
+}
+
+model MemberAsset {
+  id           String              @id @default(cuid())
+  memberId      String
+  uploadedById  String?
+  category      MemberAssetCategory
+  filePath      String
+  originalName  String
+  mimeType      String
+  sizeBytes     Int
+  isDeleted     Boolean             @default(false)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  member        Member              @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  uploadedBy    User?               @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([memberId])
+  @@index([uploadedById])
+  @@index([category])
+  @@index([isDeleted])
+  @@index([createdAt])
+}
+
+enum SupplementRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum SupplementRequestType {
+  BASIC_INFO
+  PHOTO
+  DOCUMENT
+}
+
+model SupplementRequest {
+  id            String                  @id @default(cuid())
+  memberId       String
+  requesterId    String
+  reviewerId     String?
+  requestType    SupplementRequestType  @default(BASIC_INFO)
+  status         SupplementRequestStatus @default(PENDING)
+  patch          Json
+  reason         String?
+  reviewComment  String?
+  reviewedAt     DateTime?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  member         Member                 @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  requester      User                   @relation("SupplementRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  reviewer       User?                  @relation("SupplementReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  assets         SupplementRequestAsset[]
+
+  @@index([memberId])
+  @@index([requesterId])
+  @@index([reviewerId])
+  @@index([requestType])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model SupplementRequestAsset {
+  id           String              @id @default(cuid())
+  requestId     String
+  category      MemberAssetCategory
+  filePath      String
+  originalName  String
+  mimeType      String
+  sizeBytes     Int
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  request       SupplementRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@index([category])
+  @@index([createdAt])
 }
 
 model Marriage {

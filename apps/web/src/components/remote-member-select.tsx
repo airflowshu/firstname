@@ -55,6 +55,7 @@ export function RemoteMemberSelect({
   disabledIds = [],
   seedOptions = [],
   allowClear = true,
+  disabled = false,
 }: {
   value?: string;
   onChange?: (value?: string) => void;
@@ -62,6 +63,7 @@ export function RemoteMemberSelect({
   disabledIds?: string[];
   seedOptions?: MemberOption[];
   allowClear?: boolean;
+  disabled?: boolean;
 }) {
   const [fetchedOptions, setFetchedOptions] = useState<MemberOption[]>([]);
   const [selectedFallback, setSelectedFallback] = useState<MemberOption | null>(null);
@@ -186,6 +188,7 @@ export function RemoteMemberSelect({
       style={{ width: '100%' }}
       allowClear={allowClear}
       showSearch
+      disabled={disabled}
       value={value}
       popupMatchSelectWidth={false}
       optionLabelProp="displayLabel"

@@ -3,6 +3,18 @@ export type UserStatus = 'ACTIVE' | 'DISABLED';
 export type Gender = 'MALE' | 'FEMALE' | 'UNKNOWN';
 export type LifeStatus = 'ALIVE' | 'DECEASED' | 'UNKNOWN';
 export type MarriageStatus = 'ACTIVE' | 'DIVORCED' | 'WIDOWED';
+export type SupplementRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type SupplementRequestType = 'BASIC_INFO' | 'PHOTO' | 'DOCUMENT';
+export type MemberEventType =
+  | 'BIRTH'
+  | 'MARRIAGE'
+  | 'DIVORCE'
+  | 'DEATH'
+  | 'MOVE'
+  | 'CAREER'
+  | 'HONOR'
+  | 'STORY'
+  | 'OTHER';
 
 export interface AuthUser {
   id: string;
@@ -37,6 +49,30 @@ export interface MemberOption {
   name: string;
   gender: Gender;
   subtitle: string;
+}
+
+export interface DuplicateMemberMatch {
+  id: string;
+  name: string;
+  gender: Gender;
+  birthDate: string | null;
+  generationName: string | null;
+  nativePlace: string | null;
+  father?: {
+    id: string;
+    name: string;
+  } | null;
+  mother?: {
+    id: string;
+    name: string;
+  } | null;
+  score: number;
+  matchedFields: string[];
+}
+
+export interface DuplicateMemberCheckResult {
+  hasMatches: boolean;
+  matches: DuplicateMemberMatch[];
 }
 
 export interface MemberListItem {
@@ -103,6 +139,7 @@ export interface MemberDetail extends MemberListItem {
       gender: Gender;
     };
   }>;
+  timeline: MemberTimelineEvent[];
 }
 
 export interface MembersResponse {
@@ -110,6 +147,48 @@ export interface MembersResponse {
   page: number;
   pageSize: number;
   data: MemberListItem[];
+}
+
+export interface MemberImportResult {
+  success: boolean;
+  createdCount: number;
+  message: string;
+}
+
+export type MemberAssetCategory = 'PHOTO' | 'DOCUMENT';
+
+export interface MemberAssetRecord {
+  id: string;
+  memberId: string;
+  uploadedById?: string | null;
+  category: MemberAssetCategory;
+  filePath: string;
+  fileUrl: string | null;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  isDeleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+  uploadedBy?: {
+    id: string;
+    username: string;
+    role: UserRole;
+  } | null;
+}
+
+export interface MemberTimelineEvent {
+  id: string;
+  source: 'system' | 'custom';
+  eventType: MemberEventType;
+  title: string;
+  description?: string | null;
+  eventDate: string;
+  createdBy?: {
+    id: string;
+    username: string;
+    role: UserRole;
+  } | null;
 }
 
 export interface GraphData {
@@ -190,6 +269,48 @@ export interface AuditLogRecord {
   metadata: unknown;
   createdAt: string;
   operator: {
+    id: string;
+    username: string;
+    role: UserRole;
+  } | null;
+}
+
+export interface SupplementRequestPatch {
+  name?: string;
+  gender?: Gender;
+  birthDate?: string;
+  deathDate?: string;
+  lifeStatus?: LifeStatus;
+  generationName?: string;
+  birthOrder?: number;
+  nativePlace?: string;
+  notes?: string;
+}
+
+export interface SupplementRequestRecord {
+  id: string;
+  requestType: SupplementRequestType;
+  status: SupplementRequestStatus;
+  reason?: string | null;
+  reviewComment?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  patch: SupplementRequestPatch;
+  assets: MemberAssetRecord[];
+  member: {
+    id: string;
+    name: string;
+    gender: Gender;
+    nativePlace?: string | null;
+    generationName?: string | null;
+  };
+  requester: {
+    id: string;
+    username: string;
+    role: UserRole;
+  };
+  reviewer?: {
     id: string;
     username: string;
     role: UserRole;

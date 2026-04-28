@@ -1,6 +1,12 @@
 'use client';
 
-import { DownloadOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import {
+  DownloadOutlined,
+  EditOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  UploadOutlined,
+} from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   App,
@@ -17,6 +23,7 @@ import {
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { AuthGuard } from '@/components/auth-guard';
+import { MemberImportModal } from '@/components/member-import-modal';
 import { MemberFormModal } from '@/components/member-form-modal';
 import { useAuth } from '@/components/auth-provider';
 import { api, ApiError } from '@/lib/api';
@@ -34,6 +41,7 @@ export default function MembersPage() {
   const [lifeStatus, setLifeStatus] = useState<string>();
   const [editingMember, setEditingMember] = useState<MemberListItem | undefined>();
   const [modalOpen, setModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const membersQuery = useQuery({
     queryKey: ['members', keyword, gender, lifeStatus],
@@ -88,6 +96,21 @@ export default function MembersPage() {
     },
     onError: (error) => {
       message.error(error instanceof ApiError ? error.message : '操作失败');
+    },
+  });
+
+  const importMutation = useMutation({
+    mutationFn: (file: File) => api.importMembers(file),
+    onSuccess: async (result) => {
+      message.success(result.message);
+      setImportOpen(false);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['members'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] }),
+      ]);
+    },
+    onError: (error) => {
+      message.error(error instanceof ApiError ? error.message : '导入失败');
     },
   });
 
@@ -202,6 +225,14 @@ export default function MembersPage() {
                     Excel 导出
                   </Button>
                   <Button
+                    icon={<UploadOutlined />}
+                    onClick={() => {
+                      setImportOpen(true);
+                    }}
+                  >
+                    Excel 导入
+                  </Button>
+                  <Button
                     type="primary"
                     icon={<PlusOutlined />}
                     onClick={() => {
@@ -297,6 +328,28 @@ export default function MembersPage() {
           }}
           onSubmit={async (values) => {
             await saveMutation.mutateAsync(values);
+          }}
+        />
+
+        <MemberImportModal
+          open={importOpen}
+          loading={importMutation.isPending}
+          onCancel={() => setImportOpen(false)}
+          onDownloadTemplate={async () => {
+            try {
+              const file = await api.downloadMemberImportTemplate();
+              const url = window.URL.createObjectURL(file);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = '家族成员导入模板.xlsx';
+              link.click();
+              window.URL.revokeObjectURL(url);
+            } catch (error) {
+              message.error(error instanceof ApiError ? error.message : '模板下载失败');
+            }
+          }}
+          onImport={async (file) => {
+            await importMutation.mutateAsync(file);
           }}
         />
       </div>

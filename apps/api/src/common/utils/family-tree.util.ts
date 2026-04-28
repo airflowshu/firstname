@@ -73,6 +73,14 @@ export function buildPhotoUrl(photoPath: string | null | undefined) {
   return `/uploads/${photoPath.replace(/\\/g, '/')}`;
 }
 
+export function buildUploadUrl(filePath: string | null | undefined) {
+  if (!filePath) {
+    return null;
+  }
+
+  return `/uploads/${filePath.replace(/\\/g, '/')}`;
+}
+
 function compareByBirthOrder(left: FamilyMemberSnapshot, right: FamilyMemberSnapshot) {
   if (left.birthOrder && right.birthOrder) {
     return left.birthOrder - right.birthOrder;

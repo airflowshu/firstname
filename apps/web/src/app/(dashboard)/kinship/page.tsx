@@ -2,6 +2,7 @@
 
 import { useMutation } from '@tanstack/react-query';
 import { App, Button, Card, Col, Divider, Row, Select, Space, Tag, Typography } from 'antd';
+import Link from 'next/link';
 import { useState } from 'react';
 import { AuthGuard } from '@/components/auth-guard';
 import { RemoteMemberSelect } from '@/components/remote-member-select';
@@ -124,6 +125,13 @@ export default function KinshipPage() {
                 </Col>
               </Row>
               <Divider />
+              {leftMemberId && rightMemberId ? (
+                <Button type="link" style={{ padding: 0, marginBottom: 12 }}>
+                  <Link href={`/graph?memberId=${leftMemberId}&compareId=${rightMemberId}`}>
+                    在图谱中查看两人关系路径
+                  </Link>
+                </Button>
+              ) : null}
               <Row gutter={[16, 16]}>
                 <Col xs={24} md={12}>
                   <ResultCard

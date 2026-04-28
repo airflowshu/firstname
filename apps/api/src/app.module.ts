@@ -12,6 +12,7 @@ import { GraphModule } from './graph/graph.module';
 import { KinshipModule } from './kinship/kinship.module';
 import { MembersModule } from './members/members.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { SupplementRequestsModule } from './supplement-requests/supplement-requests.module';
 import { UsersModule } from './users/users.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -33,6 +34,7 @@ import { AppService } from './app.service';
     AuthModule,
     UsersModule,
     MembersModule,
+    SupplementRequestsModule,
     DashboardModule,
     GraphModule,
     KinshipModule,

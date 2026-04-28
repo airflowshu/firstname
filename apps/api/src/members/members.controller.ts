@@ -9,10 +9,11 @@ import {
   Query,
   Res,
   UploadedFile,
+  UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { UserRole } from '@prisma/client';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { MemberAssetCategory, UserRole } from '@prisma/client';
 import type { Response } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -20,6 +21,10 @@ import type { AuthenticatedUser } from '../common/interfaces/authenticated-user.
 import {
   CreateMarriageDto,
   CreateMemberDto,
+  CreateMemberEventDto,
+  CreateQuickRelativeDto,
+  MemberAssetQueryDto,
+  MemberDuplicateCheckDto,
   MemberQueryDto,
   UpdateMarriageDto,
   UpdateMemberDto,
@@ -38,6 +43,46 @@ export class MembersController {
   @Get('options')
   options(@Query('keyword') keyword?: string) {
     return this.membersService.options(keyword);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Post('duplicate-check')
+  duplicateCheck(@Body() dto: MemberDuplicateCheckDto) {
+    return this.membersService.checkDuplicates(dto);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Get('import-template')
+  async downloadImportTemplate(
+    @CurrentUser() _user: AuthenticatedUser,
+    @Res() response: Response,
+  ) {
+    const buffer = await this.membersService.exportImportTemplate();
+    response.setHeader(
+      'Content-Disposition',
+      `attachment; filename*=UTF-8''${encodeURIComponent('家族成员导入模板.xlsx')}`,
+    );
+    response.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    response.send(buffer);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Post('import')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 10 * 1024 * 1024,
+      },
+    }),
+  )
+  importMembers(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.membersService.importMembers(file, user.sub);
   }
 
   @Roles(UserRole.ADMIN)
@@ -61,10 +106,30 @@ export class MembersController {
     return this.membersService.getById(id);
   }
 
+  @Get(':id/assets')
+  listAssets(@Param('id') id: string, @Query() query: MemberAssetQueryDto) {
+    return this.membersService.listAssets(id, query.category);
+  }
+
+  @Get(':id/timeline')
+  getTimeline(@Param('id') id: string) {
+    return this.membersService.getTimeline(id);
+  }
+
   @Roles(UserRole.ADMIN)
   @Post()
   create(@Body() dto: CreateMemberDto, @CurrentUser() user: AuthenticatedUser) {
     return this.membersService.create(dto, user.sub);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Post(':id/quick-relatives')
+  createQuickRelative(
+    @Param('id') id: string,
+    @Body() dto: CreateQuickRelativeDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.membersService.createQuickRelative(id, dto, user.sub);
   }
 
   @Roles(UserRole.ADMIN)
@@ -104,6 +169,70 @@ export class MembersController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.membersService.uploadPhoto(id, file, user.sub);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Post(':id/assets/photos')
+  @UseInterceptors(
+    FilesInterceptor('files', 12, {
+      limits: {
+        fileSize: 10 * 1024 * 1024,
+      },
+    }),
+  )
+  uploadPhotos(
+    @Param('id') id: string,
+    @UploadedFiles() files: Express.Multer.File[],
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.membersService.uploadAssets(id, files, MemberAssetCategory.PHOTO, user.sub);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Post(':id/assets/documents')
+  @UseInterceptors(
+    FilesInterceptor('files', 12, {
+      limits: {
+        fileSize: 20 * 1024 * 1024,
+      },
+    }),
+  )
+  uploadDocuments(
+    @Param('id') id: string,
+    @UploadedFiles() files: Express.Multer.File[],
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.membersService.uploadAssets(id, files, MemberAssetCategory.DOCUMENT, user.sub);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Post(':id/events')
+  createEvent(
+    @Param('id') id: string,
+    @Body() dto: CreateMemberEventDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.membersService.createEvent(id, dto, user.sub);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Delete(':id/assets/:assetId')
+  removeAsset(
+    @Param('id') id: string,
+    @Param('assetId') assetId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.membersService.removeAsset(id, assetId, user.sub);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Delete(':id/events/:eventId')
+  removeEvent(
+    @Param('id') id: string,
+    @Param('eventId') eventId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.membersService.removeEvent(id, eventId, user.sub);
   }
 
   @Roles(UserRole.ADMIN)

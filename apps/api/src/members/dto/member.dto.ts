@@ -1,7 +1,23 @@
 import { PartialType } from '@nestjs/mapped-types';
-import { Gender, LifeStatus, MarriageStatus } from '@prisma/client';
+import {
+  Gender,
+  LifeStatus,
+  MarriageStatus,
+  MemberAssetCategory,
+  MemberEventType,
+} from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 
 export class CreateMemberDto {
   @IsString()
@@ -54,6 +70,12 @@ export class CreateMemberDto {
 }
 
 export class UpdateMemberDto extends PartialType(CreateMemberDto) {}
+
+export class MemberDuplicateCheckDto extends PartialType(CreateMemberDto) {
+  @IsOptional()
+  @IsString()
+  excludeId?: string;
+}
 
 export class MemberQueryDto {
   @IsOptional()
@@ -114,4 +136,36 @@ export class UpdateMarriageDto {
   @IsOptional()
   @IsDateString()
   endDate?: string;
+}
+
+export class CreateQuickRelativeDto {
+  @IsIn(['father', 'mother', 'spouse', 'child', 'sibling'])
+  relationType!: 'father' | 'mother' | 'spouse' | 'child' | 'sibling';
+
+  @ValidateNested()
+  @Type(() => CreateMemberDto)
+  member!: CreateMemberDto;
+}
+
+export class MemberAssetQueryDto {
+  @IsOptional()
+  @IsEnum(MemberAssetCategory)
+  category?: MemberAssetCategory;
+}
+
+export class CreateMemberEventDto {
+  @IsEnum(MemberEventType)
+  eventType!: MemberEventType;
+
+  @IsString()
+  @MaxLength(100)
+  title!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  description?: string;
+
+  @IsDateString()
+  eventDate!: string;
 }
