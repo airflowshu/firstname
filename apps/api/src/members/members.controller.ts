@@ -26,6 +26,8 @@ import {
   MemberAssetQueryDto,
   MemberDuplicateCheckDto,
   MemberQueryDto,
+  UpdateMemberAssetDto,
+  UploadMemberAssetsDto,
   UpdateMarriageDto,
   UpdateMemberDto,
 } from './dto/member.dto';
@@ -108,7 +110,7 @@ export class MembersController {
 
   @Get(':id/assets')
   listAssets(@Param('id') id: string, @Query() query: MemberAssetQueryDto) {
-    return this.membersService.listAssets(id, query.category);
+    return this.membersService.listAssets(id, query);
   }
 
   @Get(':id/timeline')
@@ -183,9 +185,16 @@ export class MembersController {
   uploadPhotos(
     @Param('id') id: string,
     @UploadedFiles() files: Express.Multer.File[],
+    @Body() dto: UploadMemberAssetsDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.membersService.uploadAssets(id, files, MemberAssetCategory.PHOTO, user.sub);
+    return this.membersService.uploadAssets(
+      id,
+      files,
+      MemberAssetCategory.PHOTO,
+      user.sub,
+      dto,
+    );
   }
 
   @Roles(UserRole.ADMIN)
@@ -200,9 +209,16 @@ export class MembersController {
   uploadDocuments(
     @Param('id') id: string,
     @UploadedFiles() files: Express.Multer.File[],
+    @Body() dto: UploadMemberAssetsDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.membersService.uploadAssets(id, files, MemberAssetCategory.DOCUMENT, user.sub);
+    return this.membersService.uploadAssets(
+      id,
+      files,
+      MemberAssetCategory.DOCUMENT,
+      user.sub,
+      dto,
+    );
   }
 
   @Roles(UserRole.ADMIN)
@@ -213,6 +229,17 @@ export class MembersController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.membersService.createEvent(id, dto, user.sub);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Patch(':id/assets/:assetId')
+  updateAsset(
+    @Param('id') id: string,
+    @Param('assetId') assetId: string,
+    @Body() dto: UpdateMemberAssetDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.membersService.updateAsset(id, assetId, dto, user.sub);
   }
 
   @Roles(UserRole.ADMIN)

@@ -13,3 +13,6 @@ Thumbs.db
 apps/web/.next
 apps/api/dist
 apps/api/generated
+.codex
+api-dev.err.log
+api-dev.out.log

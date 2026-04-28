@@ -157,7 +157,15 @@ export interface MemberImportResult {
 
 export type MemberAssetCategory = 'PHOTO' | 'DOCUMENT';
 
-export interface MemberAssetRecord {
+export interface AssetMetadataFields {
+  sourceType?: string | null;
+  title?: string | null;
+  source?: string | null;
+  description?: string | null;
+  tags: string[];
+}
+
+export interface MemberAssetRecord extends AssetMetadataFields {
   id: string;
   memberId: string;
   uploadedById?: string | null;
@@ -175,6 +183,129 @@ export interface MemberAssetRecord {
     username: string;
     role: UserRole;
   } | null;
+}
+
+export interface MemberAssetLibraryItem extends MemberAssetRecord {
+  member: {
+    id: string;
+    name: string;
+    gender: Gender;
+    generationName?: string | null;
+    nativePlace?: string | null;
+  };
+}
+
+export interface MemberAssetLibraryResponse {
+  total: number;
+  page: number;
+  pageSize: number;
+  overview: {
+    totalAssets: number;
+    totalPhotos: number;
+    totalDocuments: number;
+    taggedAssets: number;
+    sourcedAssets: number;
+    describedAssets: number;
+    linkedMembers: number;
+  };
+  tagBuckets: Array<{
+    tag: string;
+    count: number;
+  }>;
+  data: MemberAssetLibraryItem[];
+}
+
+export interface AssetTagRecord {
+  id: string;
+  name: string;
+  enabled: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  useCount: number;
+}
+
+export interface AssetSourceRecord {
+  id: string;
+  name: string;
+  enabled: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  useCount: number;
+}
+
+export type AssetBatchAction = 'APPEND_TAGS' | 'SET_SOURCE_TYPE' | 'DELETE';
+
+export interface AssetImportFailure {
+  originalName: string;
+  message: string;
+}
+
+export interface AssetImportBatchResult {
+  auditLogId: string;
+  memberId: string;
+  memberName: string;
+  category: MemberAssetCategory;
+  totalCount: number;
+  successCount: number;
+  failedCount: number;
+  createdAt: string;
+  createdAssets: MemberAssetRecord[];
+  failures: AssetImportFailure[];
+}
+
+export interface AssetImportBatchView {
+  batchId: string;
+  memberName: string;
+  createdAssetIds: string[];
+}
+
+export interface AssetImportBatchRecord {
+  id: string;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  createdAt: string;
+  operator: {
+    id: string;
+    username: string;
+    role: UserRole;
+  } | null;
+  metadata: {
+    memberId?: string;
+    memberName?: string;
+    category?: MemberAssetCategory;
+    totalCount?: number;
+    successCount?: number;
+    failedCount?: number;
+    sourceType?: string | null;
+    source?: string | null;
+    tags?: string[];
+    titles?: string[];
+    failures?: AssetImportFailure[];
+    createdAssetIds?: string[];
+  } | null;
+}
+
+export interface AssetImportBatchListResponse {
+  total: number;
+  page: number;
+  pageSize: number;
+  data: AssetImportBatchRecord[];
+}
+
+export interface SupplementRequestAssetRecord extends AssetMetadataFields {
+  id: string;
+  requestId: string;
+  category: MemberAssetCategory;
+  filePath: string;
+  fileUrl: string | null;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface MemberTimelineEvent {
@@ -297,7 +428,7 @@ export interface SupplementRequestRecord {
   createdAt: string;
   updatedAt: string;
   patch: SupplementRequestPatch;
-  assets: MemberAssetRecord[];
+  assets: SupplementRequestAssetRecord[];
   member: {
     id: string;
     name: string;

@@ -26,7 +26,7 @@ import type {
   SupplementRequestType,
 } from '@/lib/types';
 
-const { Text, Title } = Typography;
+const { Paragraph, Text, Title } = Typography;
 
 function renderPatchSummary(record: SupplementRequestRecord) {
   const fieldLabelMap: Record<string, string> = {
@@ -44,6 +44,44 @@ function renderPatchSummary(record: SupplementRequestRecord) {
   return Object.entries(record.patch).map(([key, value]) => (
     <Tag key={key}>{`${fieldLabelMap[key] ?? key}: ${String(value)}`}</Tag>
   ));
+}
+
+function renderRequestAssetSummary(record: SupplementRequestRecord) {
+  return (
+    <Space direction="vertical" size={8} style={{ width: '100%' }}>
+      {record.assets.map((asset) => (
+        <div key={asset.id} className="member-request-asset-item">
+          <a
+            href={toAbsoluteAssetUrl(asset.fileUrl) ?? '#'}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Tag color={record.requestType === 'PHOTO' ? 'magenta' : 'blue'}>
+              {asset.title || asset.originalName}
+            </Tag>
+          </a>
+          <div className="member-request-asset-meta">
+            {asset.title ? <Text type="secondary">原文件：{asset.originalName}</Text> : null}
+            {asset.source || asset.sourceType ? (
+              <Text type="secondary">
+                来源：{[asset.sourceType, asset.source].filter(Boolean).join(' · ')}
+              </Text>
+            ) : null}
+            {asset.description ? (
+              <Paragraph style={{ margin: 0 }}>{asset.description}</Paragraph>
+            ) : null}
+            {asset.tags.length > 0 ? (
+              <Space wrap size={[6, 6]}>
+                {asset.tags.map((tag) => (
+                  <Tag key={`${asset.id}-${tag}`}>{tag}</Tag>
+                ))}
+              </Space>
+            ) : null}
+          </div>
+        </div>
+      ))}
+    </Space>
+  );
 }
 
 export default function SupplementRequestsPage() {
@@ -205,20 +243,7 @@ export default function SupplementRequestsPage() {
                   record.requestType === 'BASIC_INFO' ? (
                     <Space wrap>{renderPatchSummary(record)}</Space>
                   ) : (
-                    <Space wrap>
-                      {record.assets.map((asset) => (
-                        <a
-                          key={asset.id}
-                          href={toAbsoluteAssetUrl(asset.fileUrl) ?? '#'}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          <Tag color={record.requestType === 'PHOTO' ? 'magenta' : 'blue'}>
-                            {asset.originalName}
-                          </Tag>
-                        </a>
-                      ))}
-                    </Space>
+                    renderRequestAssetSummary(record)
                   )
                 ),
               },
@@ -316,18 +341,7 @@ export default function SupplementRequestsPage() {
               {reviewingRecord?.requestType === 'BASIC_INFO' ? (
                 <Space wrap>{reviewingRecord ? renderPatchSummary(reviewingRecord) : null}</Space>
               ) : (
-                <Space wrap>
-                  {reviewingRecord?.assets.map((asset) => (
-                    <a
-                      key={asset.id}
-                      href={toAbsoluteAssetUrl(asset.fileUrl) ?? '#'}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <Tag>{asset.originalName}</Tag>
-                    </a>
-                  ))}
-                </Space>
+                reviewingRecord ? renderRequestAssetSummary(reviewingRecord) : null
               )}
             </Form.Item>
             <Form.Item

@@ -2,6 +2,10 @@
 
 import type {
   AuditLogRecord,
+  AssetSourceRecord,
+  AssetTagRecord,
+  AssetImportBatchListResponse,
+  AssetImportBatchResult,
   AuthUser,
   DashboardSummary,
   DuplicateMemberCheckResult,
@@ -10,6 +14,7 @@ import type {
   KinshipResult,
   MemberDetail,
   MemberAssetRecord,
+  MemberAssetLibraryResponse,
   MemberTimelineEvent,
   MemberImportResult,
   SupplementRequestRecord,
@@ -118,10 +123,170 @@ export const api = {
   getMember: (id: string) => request<MemberDetail>(`/members/${id}`),
   getMemberTimeline: (memberId: string) =>
     request<MemberTimelineEvent[]>(`/members/${memberId}/timeline`),
-  getMemberAssets: (memberId: string, category?: 'PHOTO' | 'DOCUMENT') =>
-    request<MemberAssetRecord[]>(
-      `/members/${memberId}/assets${category ? `?category=${category}` : ''}`,
-    ),
+  getMemberAssets: (
+    memberId: string,
+    params?: {
+      category?: 'PHOTO' | 'DOCUMENT';
+      keyword?: string;
+      tag?: string;
+      sourceType?: string;
+    },
+  ) => {
+    const search = new URLSearchParams();
+    if (params?.category) {
+      search.set('category', params.category);
+    }
+    if (params?.keyword) {
+      search.set('keyword', params.keyword);
+    }
+    if (params?.tag) {
+      search.set('tag', params.tag);
+    }
+    if (params?.sourceType) {
+      search.set('sourceType', params.sourceType);
+    }
+
+    return request<MemberAssetRecord[]>(
+      `/members/${memberId}/assets${search.toString() ? `?${search.toString()}` : ''}`,
+    );
+  },
+  getAssetLibrary: (params: {
+    page?: number;
+    pageSize?: number;
+    keyword?: string;
+    category?: 'PHOTO' | 'DOCUMENT';
+    tag?: string;
+    sourceType?: string;
+    importBatchId?: string;
+    hasSource?: boolean;
+    hasDescription?: boolean;
+    hasTags?: boolean;
+  }) => {
+    const search = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '' && value !== null) {
+        search.set(key, String(value));
+      }
+    });
+
+    return request<MemberAssetLibraryResponse>(`/assets?${search.toString()}`);
+  },
+  getAssetTags: (params?: { includeDisabled?: boolean }) => {
+    const search = new URLSearchParams();
+    if (params?.includeDisabled) {
+      search.set('includeDisabled', 'true');
+    }
+
+    return request<AssetTagRecord[]>(
+      `/assets/tags${search.toString() ? `?${search.toString()}` : ''}`,
+    );
+  },
+  createAssetTag: (payload: { name: string; enabled?: boolean; sortOrder?: number }) =>
+    request<AssetTagRecord>('/assets/tags', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateAssetTag: (
+    id: string,
+    payload: { name: string; enabled?: boolean; sortOrder?: number },
+  ) =>
+    request<AssetTagRecord>(`/assets/tags/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteAssetTag: (id: string) =>
+    request<{ success: boolean }>(`/assets/tags/${id}`, {
+      method: 'DELETE',
+    }),
+  getAssetSources: (params?: { includeDisabled?: boolean }) => {
+    const search = new URLSearchParams();
+    if (params?.includeDisabled) {
+      search.set('includeDisabled', 'true');
+    }
+
+    return request<AssetSourceRecord[]>(
+      `/assets/sources${search.toString() ? `?${search.toString()}` : ''}`,
+    );
+  },
+  createAssetSource: (payload: { name: string; enabled?: boolean; sortOrder?: number }) =>
+    request<AssetSourceRecord>('/assets/sources', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  updateAssetSource: (
+    id: string,
+    payload: { name: string; enabled?: boolean; sortOrder?: number },
+  ) =>
+    request<AssetSourceRecord>(`/assets/sources/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+  deleteAssetSource: (id: string) =>
+    request<{ success: boolean }>(`/assets/sources/${id}`, {
+      method: 'DELETE',
+    }),
+  importAssetsBatch: (
+    payload: {
+      memberId: string;
+      category: 'PHOTO' | 'DOCUMENT';
+      files: File[];
+      sourceType?: string;
+      source?: string;
+      tags?: string[];
+      description?: string;
+      titles?: string[];
+    },
+  ) => {
+    const formData = new FormData();
+    formData.append('memberId', payload.memberId);
+    formData.append('category', payload.category);
+    if (payload.sourceType !== undefined) {
+      formData.append('sourceType', payload.sourceType);
+    }
+    if (payload.source !== undefined) {
+      formData.append('source', payload.source);
+    }
+    if (payload.description !== undefined) {
+      formData.append('description', payload.description);
+    }
+    if (payload.tags) {
+      formData.append('tags', JSON.stringify(payload.tags));
+    }
+    if (payload.titles) {
+      formData.append('titles', JSON.stringify(payload.titles));
+    }
+    payload.files.forEach((file) => {
+      formData.append('files', file);
+    });
+
+    return request<AssetImportBatchResult>('/assets/import-batch', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+  getAssetImportBatches: (params?: { page?: number; pageSize?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.page) {
+      search.set('page', String(params.page));
+    }
+    if (params?.pageSize) {
+      search.set('pageSize', String(params.pageSize));
+    }
+
+    return request<AssetImportBatchListResponse>(
+      `/assets/import-batches${search.toString() ? `?${search.toString()}` : ''}`,
+    );
+  },
+  batchOperateAssets: (payload: {
+    action: 'APPEND_TAGS' | 'SET_SOURCE_TYPE' | 'DELETE';
+    assetIds: string[];
+    tags?: string[];
+    sourceType?: string;
+  }) =>
+    request<{ success: boolean; action: string; affectedCount: number }>('/assets/batch', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   getMemberOptions: (keyword?: string) =>
     request<MemberOption[]>(
       `/members/options${keyword ? `?keyword=${encodeURIComponent(keyword)}` : ''}`,
@@ -167,6 +332,11 @@ export const api = {
       memberId: string;
       category: 'PHOTO' | 'DOCUMENT';
       reason?: string;
+      sourceType?: string;
+      title?: string;
+      source?: string;
+      tags?: string[];
+      description?: string;
     },
     files: File[],
   ) => {
@@ -175,6 +345,21 @@ export const api = {
     formData.append('category', payload.category);
     if (payload.reason) {
       formData.append('reason', payload.reason);
+    }
+    if (payload.sourceType !== undefined) {
+      formData.append('sourceType', payload.sourceType);
+    }
+    if (payload.title !== undefined) {
+      formData.append('title', payload.title);
+    }
+    if (payload.source !== undefined) {
+      formData.append('source', payload.source);
+    }
+    if (payload.description !== undefined) {
+      formData.append('description', payload.description);
+    }
+    if (payload.tags) {
+      formData.append('tags', JSON.stringify(payload.tags));
     }
     files.forEach((file) => {
       formData.append('files', file);
@@ -233,11 +418,37 @@ export const api = {
       body: formData,
     });
   },
-  uploadMemberAssets: (id: string, category: 'PHOTO' | 'DOCUMENT', files: File[]) => {
+  uploadMemberAssets: (
+    id: string,
+    category: 'PHOTO' | 'DOCUMENT',
+    payload: {
+      files: File[];
+      sourceType?: string;
+      title?: string;
+      source?: string;
+      tags?: string[];
+      description?: string;
+    },
+  ) => {
     const formData = new FormData();
-    files.forEach((file) => {
+    payload.files.forEach((file) => {
       formData.append('files', file);
     });
+    if (payload.title !== undefined) {
+      formData.append('title', payload.title);
+    }
+    if (payload.sourceType !== undefined) {
+      formData.append('sourceType', payload.sourceType);
+    }
+    if (payload.source !== undefined) {
+      formData.append('source', payload.source);
+    }
+    if (payload.description !== undefined) {
+      formData.append('description', payload.description);
+    }
+    if (payload.tags) {
+      formData.append('tags', JSON.stringify(payload.tags));
+    }
 
     return request<MemberAssetRecord[]>(
       `/members/${id}/assets/${category === 'PHOTO' ? 'photos' : 'documents'}`,
@@ -247,6 +458,21 @@ export const api = {
       },
     );
   },
+  updateMemberAsset: (
+    memberId: string,
+    assetId: string,
+    payload: {
+      title?: string;
+      sourceType?: string;
+      source?: string;
+      tags?: string[];
+      description?: string;
+    },
+  ) =>
+    request<MemberAssetRecord>(`/members/${memberId}/assets/${assetId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
   createMemberEvent: (
     memberId: string,
     payload: {

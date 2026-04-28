@@ -7,9 +7,11 @@ import {
   EditOutlined,
   FileTextOutlined,
   FileZipOutlined,
+  FilterOutlined,
   PaperClipOutlined,
   PlusOutlined,
   PictureOutlined,
+  SearchOutlined,
   UploadOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -21,8 +23,10 @@ import {
   Descriptions,
   Divider,
   Image,
+  Input,
   List,
   Popconfirm,
+  Select,
   Space,
   Table,
   Tag,
@@ -31,9 +35,10 @@ import {
 } from 'antd';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useDeferredValue, useRef, useState } from 'react';
 import { AuthGuard } from '@/components/auth-guard';
 import { MarriageFormModal } from '@/components/marriage-form-modal';
+import { MemberAssetModal } from '@/components/member-asset-modal';
 import { MemberEventModal } from '@/components/member-event-modal';
 import { MemberFormModal } from '@/components/member-form-modal';
 import { SupplementAssetRequestModal } from '@/components/supplement-asset-request-modal';
@@ -66,13 +71,15 @@ export default function MemberDetailPage() {
   const memberId = Array.isArray(params.id) ? params.id[0] : params.id;
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const photoInputRef = useRef<HTMLInputElement | null>(null);
-  const documentInputRef = useRef<HTMLInputElement | null>(null);
   const { isAdmin } = useAuth();
   const [editOpen, setEditOpen] = useState(false);
   const [marriageOpen, setMarriageOpen] = useState(false);
   const [supplementOpen, setSupplementOpen] = useState(false);
   const [assetSupplementType, setAssetSupplementType] = useState<'PHOTO' | 'DOCUMENT' | null>(null);
+  const [assetModalType, setAssetModalType] = useState<'PHOTO' | 'DOCUMENT' | null>(null);
+  const [editingAsset, setEditingAsset] = useState<MemberAssetRecord | null>(null);
+  const [assetKeyword, setAssetKeyword] = useState('');
+  const [assetTag, setAssetTag] = useState<string | undefined>();
   const [eventOpen, setEventOpen] = useState(false);
   const [quickRelativeConfig, setQuickRelativeConfig] = useState<QuickRelativeConfig | null>(null);
   const [editingMarriage, setEditingMarriage] = useState<{
@@ -82,6 +89,7 @@ export default function MemberDetailPage() {
     startDate: string | null;
     endDate: string | null;
   } | null>(null);
+  const deferredAssetKeyword = useDeferredValue(assetKeyword.trim());
 
   const memberQuery = useQuery({
     queryKey: ['member', memberId],
@@ -89,14 +97,29 @@ export default function MemberDetailPage() {
   });
 
   const member = memberQuery.data;
-  const photoAssetsQuery = useQuery({
-    queryKey: ['member-assets', memberId, 'PHOTO'],
-    queryFn: () => api.getMemberAssets(memberId, 'PHOTO'),
+  const allAssetsQuery = useQuery({
+    queryKey: ['member-assets', memberId, 'all'],
+    queryFn: () => api.getMemberAssets(memberId),
   });
-  const documentAssetsQuery = useQuery({
-    queryKey: ['member-assets', memberId, 'DOCUMENT'],
-    queryFn: () => api.getMemberAssets(memberId, 'DOCUMENT'),
+  const filteredAssetsQuery = useQuery({
+    queryKey: ['member-assets', memberId, 'filtered', deferredAssetKeyword, assetTag],
+    queryFn: () =>
+      api.getMemberAssets(memberId, {
+        keyword: deferredAssetKeyword || undefined,
+        tag: assetTag,
+      }),
   });
+  const matchedAssets = filteredAssetsQuery.data ?? [];
+  const photoAssets = matchedAssets.filter((asset) => asset.category === 'PHOTO');
+  const documentAssets = matchedAssets.filter((asset) => asset.category === 'DOCUMENT');
+  const totalAssetCount = allAssetsQuery.data?.length ?? 0;
+  const matchedAssetCount = matchedAssets.length;
+  const assetTagOptions = Array.from(
+    new Set((allAssetsQuery.data ?? []).flatMap((asset) => asset.tags)),
+  ).map((tag) => ({
+    label: tag,
+    value: tag,
+  }));
   const activeSpouses =
     member?.marriages.filter((marriage) => marriage.status === 'ACTIVE').map((marriage) => marriage.spouse) ??
     [];
@@ -190,17 +213,51 @@ export default function MemberDetailPage() {
   });
 
   const uploadAssetMutation = useMutation({
-    mutationFn: (payload: { category: 'PHOTO' | 'DOCUMENT'; files: File[] }) =>
-      api.uploadMemberAssets(memberId, payload.category, payload.files),
+    mutationFn: (payload: {
+      category: 'PHOTO' | 'DOCUMENT';
+      files: File[];
+      sourceType?: string;
+      title?: string;
+      source?: string;
+      tags: string[];
+      description?: string;
+    }) => api.uploadMemberAssets(memberId, payload.category, payload),
     onSuccess: async (_result, payload) => {
       message.success(payload.category === 'PHOTO' ? '成员照片已上传' : '成员附件已上传');
+      setAssetModalType(null);
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['member-assets', memberId, payload.category] }),
+        queryClient.invalidateQueries({ queryKey: ['member-assets', memberId] }),
         queryClient.invalidateQueries({ queryKey: ['member', memberId] }),
       ]);
     },
     onError: (error) => {
       message.error(error instanceof ApiError ? error.message : '上传资料失败');
+    },
+  });
+
+  const updateAssetMutation = useMutation({
+    mutationFn: (payload: {
+      assetId: string;
+      sourceType?: string;
+      title?: string;
+      source?: string;
+      tags: string[];
+      description?: string;
+    }) =>
+      api.updateMemberAsset(memberId, payload.assetId, {
+        sourceType: payload.sourceType,
+        title: payload.title,
+        source: payload.source,
+        tags: payload.tags,
+        description: payload.description,
+      }),
+    onSuccess: async () => {
+      message.success('资料信息已更新');
+      setEditingAsset(null);
+      await queryClient.invalidateQueries({ queryKey: ['member-assets', memberId] });
+    },
+    onError: (error) => {
+      message.error(error instanceof ApiError ? error.message : '更新资料信息失败');
     },
   });
 
@@ -236,10 +293,7 @@ export default function MemberDetailPage() {
     mutationFn: (asset: MemberAssetRecord) => api.deleteMemberAsset(memberId, asset.id),
     onSuccess: async () => {
       message.success('成员资料已删除');
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['member-assets', memberId, 'PHOTO'] }),
-        queryClient.invalidateQueries({ queryKey: ['member-assets', memberId, 'DOCUMENT'] }),
-      ]);
+      await queryClient.invalidateQueries({ queryKey: ['member-assets', memberId] });
     },
     onError: (error) => {
       message.error(error instanceof ApiError ? error.message : '删除资料失败');
@@ -264,12 +318,26 @@ export default function MemberDetailPage() {
   });
 
   const supplementAssetMutation = useMutation({
-    mutationFn: (payload: { category: 'PHOTO' | 'DOCUMENT'; reason?: string; files: File[] }) =>
+    mutationFn: (payload: {
+      category: 'PHOTO' | 'DOCUMENT';
+      reason?: string;
+      sourceType?: string;
+      title?: string;
+      source?: string;
+      tags: string[];
+      description?: string;
+      files: File[];
+    }) =>
       api.createSupplementAssetRequest(
         {
           memberId,
           category: payload.category,
           reason: payload.reason,
+          sourceType: payload.sourceType,
+          title: payload.title,
+          source: payload.source,
+          tags: payload.tags,
+          description: payload.description,
         },
         payload.files,
       ),
@@ -422,6 +490,22 @@ export default function MemberDetailPage() {
     }
   };
 
+  const renderAssetTags = (asset: MemberAssetRecord) =>
+    asset.tags.length > 0 ? (
+      <Space wrap size={[6, 6]}>
+        {asset.tags.map((tag) => (
+          <Tag
+            key={`${asset.id}-${tag}`}
+            color={assetTag === tag ? 'processing' : 'default'}
+            style={{ cursor: 'pointer', marginInlineEnd: 0 }}
+            onClick={() => setAssetTag(assetTag === tag ? undefined : tag)}
+          >
+            {tag}
+          </Tag>
+        ))}
+      </Space>
+    ) : null;
+
   return (
     <AuthGuard>
       <div className="page-stack">
@@ -486,32 +570,51 @@ export default function MemberDetailPage() {
           </Space>
         </Card>
 
-        <input
-          ref={photoInputRef}
-          hidden
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={(event) => {
-            const files = Array.from(event.target.files ?? []);
-            if (files.length > 0) {
-              uploadAssetMutation.mutate({ category: 'PHOTO', files });
-            }
-          }}
-        />
-        <input
-          ref={documentInputRef}
-          hidden
-          type="file"
-          accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip"
-          multiple
-          onChange={(event) => {
-            const files = Array.from(event.target.files ?? []);
-            if (files.length > 0) {
-              uploadAssetMutation.mutate({ category: 'DOCUMENT', files });
-            }
-          }}
-        />
+        <Card className="soft-panel" loading={allAssetsQuery.isLoading}>
+          <div className="member-asset-toolbar">
+            <div>
+              <Title level={5} style={{ margin: 0 }}>
+                资料检索
+              </Title>
+              <Paragraph type="secondary" style={{ margin: '4px 0 0' }}>
+                已沉淀 {totalAssetCount} 项资料，当前匹配 {matchedAssetCount} 项，可按标题、来源、描述或标签检索。
+              </Paragraph>
+            </div>
+            <Space wrap className="member-asset-toolbar-actions">
+              <Input
+                allowClear
+                value={assetKeyword}
+                prefix={<SearchOutlined />}
+                placeholder="搜索资料标题、原文件名、来源或描述"
+                style={{ width: 280 }}
+                onChange={(event) => setAssetKeyword(event.target.value)}
+              />
+              <Select
+                allowClear
+                value={assetTag}
+                placeholder="按标签筛选"
+                style={{ width: 220 }}
+                options={assetTagOptions}
+                suffixIcon={<FilterOutlined />}
+                onChange={(value) => setAssetTag(value)}
+              />
+            </Space>
+          </div>
+          {assetTagOptions.length > 0 ? (
+            <Space wrap size={[8, 8]} style={{ marginTop: 12 }}>
+              {assetTagOptions.slice(0, 16).map((option) => (
+                <Tag
+                  key={option.value}
+                  color={assetTag === option.value ? 'processing' : 'default'}
+                  style={{ cursor: 'pointer', marginInlineEnd: 0 }}
+                  onClick={() => setAssetTag(assetTag === option.value ? undefined : option.value)}
+                >
+                  {option.label}
+                </Tag>
+              ))}
+            </Space>
+          ) : null}
+        </Card>
 
         <Card
           className="soft-panel"
@@ -522,7 +625,7 @@ export default function MemberDetailPage() {
                 <Button
                   icon={<PictureOutlined />}
                   loading={uploadAssetMutation.isPending}
-                  onClick={() => photoInputRef.current?.click()}
+                  onClick={() => setAssetModalType('PHOTO')}
                 >
                   上传照片
                 </Button>
@@ -532,9 +635,9 @@ export default function MemberDetailPage() {
             ) : null
           }
         >
-          {photoAssetsQuery.data && photoAssetsQuery.data.length > 0 ? (
+          {photoAssets.length > 0 ? (
             <div className="member-photo-grid">
-              {photoAssetsQuery.data.map((asset) => (
+              {photoAssets.map((asset) => (
                 <div key={asset.id} className="member-photo-card">
                   <Image
                     src={toAbsoluteAssetUrl(asset.fileUrl) ?? ''}
@@ -543,24 +646,66 @@ export default function MemberDetailPage() {
                     height={180}
                     style={{ objectFit: 'cover', borderRadius: 12 }}
                   />
-                  <div className="member-asset-footer">
-                    <Text ellipsis style={{ maxWidth: 180 }}>
-                      {asset.originalName}
+                  <div className="member-asset-body">
+                    <Text strong ellipsis>
+                      {asset.title || asset.originalName}
                     </Text>
-                    {isAdmin ? (
-                      <Popconfirm
-                        title="确定删除这张照片吗？"
-                        onConfirm={() => deleteAssetMutation.mutate(asset)}
-                      >
-                        <Button size="small" icon={<DeleteOutlined />} danger />
-                      </Popconfirm>
+                    {asset.title ? (
+                      <Text type="secondary" className="member-asset-subtitle">
+                        原文件：{asset.originalName}
+                      </Text>
                     ) : null}
+                    {asset.source ? (
+                      <Text type="secondary" className="member-asset-subtitle">
+                        来源：
+                        {[asset.sourceType, asset.source].filter(Boolean).join(' · ')}
+                      </Text>
+                    ) : asset.sourceType ? (
+                      <Text type="secondary" className="member-asset-subtitle">
+                        来源：{asset.sourceType}
+                      </Text>
+                    ) : null}
+                    {asset.description ? (
+                      <Paragraph className="member-asset-description">
+                        {asset.description}
+                      </Paragraph>
+                    ) : null}
+                    {renderAssetTags(asset)}
+                    <Text type="secondary" className="member-asset-subtitle">
+                      上传于 {formatDate(asset.createdAt, 'YYYY-MM-DD HH:mm')}
+                    </Text>
+                  </div>
+                  <div className="member-asset-footer">
+                    <Text type="secondary">
+                      {Math.max(1, Math.round(asset.sizeBytes / 1024))} KB
+                    </Text>
+                    <Space size={8}>
+                      {isAdmin ? (
+                        <Button
+                          size="small"
+                          icon={<EditOutlined />}
+                          onClick={() => setEditingAsset(asset)}
+                        >
+                          编辑
+                        </Button>
+                      ) : null}
+                      {isAdmin ? (
+                        <Popconfirm
+                          title="确定删除这张照片吗？"
+                          onConfirm={() => deleteAssetMutation.mutate(asset)}
+                        >
+                          <Button size="small" icon={<DeleteOutlined />} danger />
+                        </Popconfirm>
+                      ) : null}
+                    </Space>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <Text type="secondary">暂无成员照片。</Text>
+            <Text type="secondary">
+              {deferredAssetKeyword || assetTag ? '当前筛选下暂无成员照片。' : '暂无成员照片。'}
+            </Text>
           )}
         </Card>
 
@@ -573,7 +718,7 @@ export default function MemberDetailPage() {
                 <Button
                   icon={<PaperClipOutlined />}
                   loading={uploadAssetMutation.isPending}
-                  onClick={() => documentInputRef.current?.click()}
+                  onClick={() => setAssetModalType('DOCUMENT')}
                 >
                   上传附件
                 </Button>
@@ -584,14 +729,25 @@ export default function MemberDetailPage() {
           }
         >
           <List
-            dataSource={documentAssetsQuery.data ?? []}
-            loading={documentAssetsQuery.isLoading}
-            locale={{ emptyText: '暂无资料附件。' }}
+            dataSource={documentAssets}
+            loading={filteredAssetsQuery.isLoading || filteredAssetsQuery.isFetching}
+            locale={{
+              emptyText:
+                deferredAssetKeyword || assetTag ? '当前筛选下暂无资料附件。' : '暂无资料附件。',
+            }}
             renderItem={(asset) => (
               <List.Item
                 actions={
                   isAdmin
                     ? [
+                        <Button
+                          key="edit"
+                          size="small"
+                          icon={<EditOutlined />}
+                          onClick={() => setEditingAsset(asset)}
+                        >
+                          编辑
+                        </Button>,
                         <Popconfirm
                           key="delete"
                           title="确定删除这个附件吗？"
@@ -619,10 +775,38 @@ export default function MemberDetailPage() {
                       target="_blank"
                       rel="noreferrer"
                     >
-                      {asset.originalName}
+                      {asset.title || asset.originalName}
                     </a>
                   }
-                  description={`${Math.max(1, Math.round(asset.sizeBytes / 1024))} KB · 上传于 ${formatDate(asset.createdAt, 'YYYY-MM-DD HH:mm')}`}
+                  description={
+                    <div className="member-asset-list-desc">
+                      {asset.title ? (
+                        <Text type="secondary" className="member-asset-subtitle">
+                          原文件：{asset.originalName}
+                        </Text>
+                      ) : null}
+                      {asset.source ? (
+                        <Text type="secondary" className="member-asset-subtitle">
+                          来源：
+                          {[asset.sourceType, asset.source].filter(Boolean).join(' · ')}
+                        </Text>
+                      ) : asset.sourceType ? (
+                        <Text type="secondary" className="member-asset-subtitle">
+                          来源：{asset.sourceType}
+                        </Text>
+                      ) : null}
+                      {asset.description ? (
+                        <Paragraph className="member-asset-description">
+                          {asset.description}
+                        </Paragraph>
+                      ) : null}
+                      {renderAssetTags(asset)}
+                      <Text type="secondary" className="member-asset-subtitle">
+                        {Math.max(1, Math.round(asset.sizeBytes / 1024))} KB · 上传于{' '}
+                        {formatDate(asset.createdAt, 'YYYY-MM-DD HH:mm')}
+                      </Text>
+                    </div>
+                  }
                 />
               </List.Item>
             )}
@@ -930,6 +1114,46 @@ export default function MemberDetailPage() {
           }}
           onSubmit={async (values) => {
             await marriageMutation.mutateAsync(values);
+          }}
+        />
+
+        <MemberAssetModal
+          open={Boolean(assetModalType) || Boolean(editingAsset)}
+          mode={editingAsset ? 'edit' : 'upload'}
+          category={editingAsset?.category ?? assetModalType ?? 'PHOTO'}
+          memberName={member?.name}
+          initialValue={editingAsset}
+          loading={uploadAssetMutation.isPending || updateAssetMutation.isPending}
+          onCancel={() => {
+            setAssetModalType(null);
+            setEditingAsset(null);
+          }}
+          onSubmit={async (values) => {
+            if (editingAsset) {
+            await updateAssetMutation.mutateAsync({
+              assetId: editingAsset.id,
+              sourceType: values.sourceType,
+              title: values.title,
+              source: values.source,
+              tags: values.tags,
+                description: values.description,
+              });
+              return;
+            }
+
+            if (!assetModalType || !values.files) {
+              return;
+            }
+
+            await uploadAssetMutation.mutateAsync({
+              category: assetModalType,
+              files: values.files,
+              sourceType: values.sourceType,
+              title: values.title,
+              source: values.source,
+              tags: values.tags,
+              description: values.description,
+            });
           }}
         />
 

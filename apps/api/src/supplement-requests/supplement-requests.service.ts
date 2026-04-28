@@ -214,6 +214,7 @@ export class SupplementRequestsService {
       dto.category === MemberAssetCategory.PHOTO
         ? SupplementRequestType.PHOTO
         : SupplementRequestType.DOCUMENT;
+    const normalizedAssetMetadata = this.normalizeAssetMetadata(dto);
 
     const created = await this.prisma.$transaction(async (tx) => {
       const request = await tx.supplementRequest.create({
@@ -240,6 +241,11 @@ export class SupplementRequestsService {
             category: dto.category,
             filePath: relativePath,
             originalName: file.originalname,
+            title: normalizedAssetMetadata.title,
+            sourceType: normalizedAssetMetadata.sourceType,
+            source: normalizedAssetMetadata.source,
+            description: normalizedAssetMetadata.description,
+            tags: normalizedAssetMetadata.tags,
             mimeType: file.mimetype,
             sizeBytes: file.size,
           },
@@ -268,6 +274,11 @@ export class SupplementRequestsService {
         category: dto.category,
         count: files.length,
         reason: dto.reason,
+        title: normalizedAssetMetadata.title,
+        sourceType: normalizedAssetMetadata.sourceType,
+        source: normalizedAssetMetadata.source,
+        tags: normalizedAssetMetadata.tags,
+        hasDescription: Boolean(normalizedAssetMetadata.description),
       },
     });
 
@@ -326,6 +337,11 @@ export class SupplementRequestsService {
                 category: asset.category,
                 filePath: asset.filePath,
                 originalName: asset.originalName,
+                title: asset.title,
+                sourceType: asset.sourceType,
+                source: asset.source,
+                description: asset.description,
+                tags: asset.tags,
                 mimeType: asset.mimeType,
                 sizeBytes: asset.sizeBytes,
               },
@@ -383,6 +399,11 @@ export class SupplementRequestsService {
         category: MemberAssetCategory;
         filePath: string;
         originalName: string;
+        title: string | null;
+        sourceType: string | null;
+        source: string | null;
+        description: string | null;
+        tags: string[];
         mimeType: string;
         sizeBytes: number;
         createdAt: Date;
@@ -428,6 +449,43 @@ export class SupplementRequestsService {
     if (!allowedDocumentMimeTypes.has(file.mimetype)) {
       throw new BadRequestException(`文件 ${file.originalname} 不是支持的附件类型。`);
     }
+  }
+
+  private normalizeAssetMetadata(dto: CreateSupplementAssetRequestDto) {
+    return {
+      sourceType: this.normalizeNullableText(dto.sourceType) ?? null,
+      title: this.normalizeNullableText(dto.title) ?? null,
+      source: this.normalizeNullableText(dto.source) ?? null,
+      description: this.normalizeNullableText(dto.description) ?? null,
+      tags: this.normalizeAssetTags(dto.tags) ?? [],
+    };
+  }
+
+  private normalizeNullableText(value?: string | null) {
+    if (value === undefined) {
+      return undefined;
+    }
+
+    if (value === null) {
+      return null;
+    }
+
+    const normalized = value.trim();
+    return normalized ? normalized : null;
+  }
+
+  private normalizeAssetTags(tags?: string[]) {
+    if (tags === undefined) {
+      return undefined;
+    }
+
+    return Array.from(
+      new Set(
+        tags
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+      ),
+    ).slice(0, 12);
   }
 
   private buildNormalizedPatch(

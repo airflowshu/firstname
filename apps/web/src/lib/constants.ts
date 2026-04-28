@@ -1,6 +1,7 @@
 import {
   ApartmentOutlined,
   AuditOutlined,
+  BookOutlined,
   DashboardOutlined,
   NodeIndexOutlined,
   ProfileOutlined,
@@ -16,6 +17,7 @@ export const USER_STORAGE_KEY = 'fisrtname-user';
 export const appMenus = [
   { key: '/dashboard', icon: DashboardOutlined, label: '首页统计' },
   { key: '/members', icon: TeamOutlined, label: '成员管理' },
+  { key: '/assets', icon: BookOutlined, label: '家族资料' },
   { key: '/graph', icon: NodeIndexOutlined, label: '关系图谱' },
   { key: '/kinship', icon: ApartmentOutlined, label: '称呼计算' },
   { key: '/supplement-requests', icon: SnippetsOutlined, label: '资料补充' },

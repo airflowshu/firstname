@@ -16,6 +16,8 @@ function buildPairKey(firstId: string, secondId: string) {
 
 async function main() {
   await prisma.auditLog.deleteMany();
+  await prisma.assetSource.deleteMany();
+  await prisma.assetTag.deleteMany();
   await prisma.kinshipAlias.deleteMany();
   await prisma.marriage.deleteMany();
   await prisma.member.deleteMany();
@@ -252,6 +254,30 @@ async function main() {
         standardTerm: '舅舅',
         familyAlias: '大舅',
       },
+    ],
+  });
+
+  await prisma.assetTag.createMany({
+    data: [
+      { name: '合影', enabled: true, sortOrder: 10 },
+      { name: '证书', enabled: true, sortOrder: 20 },
+      { name: '毕业', enabled: true, sortOrder: 30 },
+      { name: '婚礼', enabled: true, sortOrder: 40 },
+      { name: '祖宅', enabled: true, sortOrder: 50 },
+      { name: '墓碑', enabled: true, sortOrder: 60 },
+      { name: '族谱', enabled: true, sortOrder: 70 },
+      { name: '口述资料', enabled: true, sortOrder: 80 },
+    ],
+  });
+
+  await prisma.assetSource.createMany({
+    data: [
+      { name: '族人提供', enabled: true, sortOrder: 10 },
+      { name: '老相册翻拍', enabled: true, sortOrder: 20 },
+      { name: '证件扫描', enabled: true, sortOrder: 30 },
+      { name: '地方志摘录', enabled: true, sortOrder: 40 },
+      { name: '墓碑抄录', enabled: true, sortOrder: 50 },
+      { name: '口述整理', enabled: true, sortOrder: 60 },
     ],
   });
 

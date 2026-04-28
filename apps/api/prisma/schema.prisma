@@ -96,6 +96,28 @@ model Member {
   @@index([isDeleted])
 }
 
+model AssetTag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  enabled   Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, sortOrder])
+}
+
+model AssetSource {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  enabled   Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, sortOrder])
+}
+
 enum MemberEventType {
   BIRTH
   MARRIAGE
@@ -141,6 +163,11 @@ model MemberAsset {
   category      MemberAssetCategory
   filePath      String
   originalName  String
+  title         String?
+  sourceType    String?
+  source        String?
+  description   String?
+  tags          String[]            @default([])
   mimeType      String
   sizeBytes     Int
   isDeleted     Boolean             @default(false)
@@ -200,6 +227,11 @@ model SupplementRequestAsset {
   category      MemberAssetCategory
   filePath      String
   originalName  String
+  title         String?
+  sourceType    String?
+  source        String?
+  description   String?
+  tags          String[]            @default([])
   mimeType      String
   sizeBytes     Int
   createdAt     DateTime           @default(now())

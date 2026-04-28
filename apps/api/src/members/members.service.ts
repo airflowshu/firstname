@@ -15,6 +15,7 @@ import {
   MemberAssetCategory,
   MemberEventType,
   Prisma,
+  UserRole,
   type Member,
 } from '@prisma/client';
 import ExcelJS from 'exceljs';
@@ -23,15 +24,25 @@ import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
 import { buildPairKey, buildPhotoUrl, buildUploadUrl } from '../common/utils/family-tree.util';
+import type { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
 import { DASHBOARD_SUMMARY_CACHE_KEY } from '../dashboard/dashboard.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { BatchAssetOperationDto } from './dto/asset-batch.dto';
+import { AssetImportBatchQueryDto, ImportAssetBatchDto } from './dto/asset-import.dto';
+import { AssetSourceQueryDto, UpsertAssetSourceDto } from './dto/asset-source.dto';
+import { AssetTagQueryDto, UpsertAssetTagDto } from './dto/asset-tag.dto';
 import {
   CreateMarriageDto,
   CreateMemberDto,
+  MemberAssetMetadataDto,
+  MemberAssetLibraryQueryDto,
+  MemberAssetQueryDto,
   CreateMemberEventDto,
   CreateQuickRelativeDto,
   MemberDuplicateCheckDto,
   MemberQueryDto,
+  UpdateMemberAssetDto,
+  UploadMemberAssetsDto,
   UpdateMarriageDto,
   UpdateMemberDto,
 } from './dto/member.dto';
@@ -308,7 +319,7 @@ export class MembersService {
     };
   }
 
-  async listAssets(memberId: string, category?: MemberAssetCategory) {
+  async listAssets(memberId: string, query: MemberAssetQueryDto = {}) {
     const member = await this.prisma.member.findFirst({
       where: { id: memberId, isDeleted: false },
       select: { id: true },
@@ -318,24 +329,1088 @@ export class MembersService {
       throw new NotFoundException('未找到对应成员。');
     }
 
+    const normalizedKeyword = query.keyword?.trim();
+    const normalizedTag = query.tag?.trim();
+    const normalizedSourceType = query.sourceType?.trim();
+
     const assets = await this.prisma.memberAsset.findMany({
       where: {
         memberId,
         isDeleted: false,
-        category,
+        category: query.category,
+        sourceType: normalizedSourceType || undefined,
+        tags: normalizedTag
+          ? {
+              has: normalizedTag,
+            }
+          : undefined,
+        OR: normalizedKeyword
+          ? [
+              {
+                originalName: {
+                  contains: normalizedKeyword,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                title: {
+                  contains: normalizedKeyword,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                sourceType: {
+                  contains: normalizedKeyword,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                source: {
+                  contains: normalizedKeyword,
+                  mode: 'insensitive',
+                },
+              },
+              {
+                description: {
+                  contains: normalizedKeyword,
+                  mode: 'insensitive',
+                },
+              },
+            ]
+          : undefined,
       },
       include: {
         uploadedBy: {
           select: { id: true, username: true, role: true },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ category: 'asc' }, { createdAt: 'desc' }],
     });
 
     return assets.map((asset) => ({
       ...asset,
       fileUrl: buildUploadUrl(asset.filePath),
     }));
+  }
+
+  async listAssetTags(query: AssetTagQueryDto = {}, user?: AuthenticatedUser) {
+    const includeDisabled = query.includeDisabled === true && user?.role === UserRole.ADMIN;
+
+    const [tags, assetRows, requestAssetRows] = await this.prisma.$transaction([
+      this.prisma.assetTag.findMany({
+        where: {
+          enabled: includeDisabled ? undefined : true,
+        },
+        orderBy: [{ enabled: 'desc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+      }),
+      this.prisma.memberAsset.findMany({
+        where: {
+          isDeleted: false,
+        },
+        select: {
+          tags: true,
+        },
+      }),
+      this.prisma.supplementRequestAsset.findMany({
+        select: {
+          tags: true,
+        },
+      }),
+    ]);
+
+    const usageCounter = new Map<string, number>();
+    for (const row of [...assetRows, ...requestAssetRows]) {
+      for (const tag of row.tags) {
+        usageCounter.set(tag, (usageCounter.get(tag) ?? 0) + 1);
+      }
+    }
+
+    return tags.map((tag) => ({
+      ...tag,
+      useCount: usageCounter.get(tag.name) ?? 0,
+    }));
+  }
+
+  async listAssetSources(query: AssetSourceQueryDto = {}, user?: AuthenticatedUser) {
+    const includeDisabled = query.includeDisabled === true && user?.role === UserRole.ADMIN;
+
+    const [sources, assets, requestAssets] = await this.prisma.$transaction([
+      this.prisma.assetSource.findMany({
+        where: {
+          enabled: includeDisabled ? undefined : true,
+        },
+        orderBy: [{ enabled: 'desc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+      }),
+      this.prisma.memberAsset.findMany({
+        where: {
+          isDeleted: false,
+          sourceType: {
+            not: null,
+          },
+        },
+        select: {
+          sourceType: true,
+        },
+      }),
+      this.prisma.supplementRequestAsset.findMany({
+        where: {
+          sourceType: {
+            not: null,
+          },
+        },
+        select: {
+          sourceType: true,
+        },
+      }),
+    ]);
+
+    const usageCounter = new Map<string, number>();
+    for (const row of [...assets, ...requestAssets]) {
+      if (!row.sourceType) {
+        continue;
+      }
+
+      usageCounter.set(row.sourceType, (usageCounter.get(row.sourceType) ?? 0) + 1);
+    }
+
+    return sources.map((source) => ({
+      ...source,
+      useCount: usageCounter.get(source.name) ?? 0,
+    }));
+  }
+
+  async createAssetTag(dto: UpsertAssetTagDto, operatorId: string) {
+    const normalizedName = dto.name.trim();
+    if (!normalizedName) {
+      throw new BadRequestException('标签名称不能为空。');
+    }
+
+    const existing = await this.prisma.assetTag.findFirst({
+      where: {
+        name: {
+          equals: normalizedName,
+          mode: 'insensitive',
+        },
+      },
+    });
+
+    if (existing) {
+      throw new ConflictException('该推荐标签已存在，请直接编辑现有标签。');
+    }
+
+    const created = await this.prisma.assetTag.create({
+      data: {
+        name: normalizedName,
+        enabled: dto.enabled ?? true,
+        sortOrder: dto.sortOrder ?? 0,
+      },
+    });
+
+    await this.auditLogsService.log({
+      operatorId,
+      action: AuditAction.CREATE,
+      targetType: 'ASSET_TAG',
+      targetId: created.id,
+      after: created,
+    });
+
+    return {
+      ...created,
+      useCount: 0,
+    };
+  }
+
+  async updateAssetTag(id: string, dto: UpsertAssetTagDto, operatorId: string) {
+    const existing = await this.prisma.assetTag.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('未找到对应推荐标签。');
+    }
+
+    const normalizedName = dto.name.trim();
+    if (!normalizedName) {
+      throw new BadRequestException('标签名称不能为空。');
+    }
+
+    const duplicate = await this.prisma.assetTag.findFirst({
+      where: {
+        id: {
+          not: id,
+        },
+        name: {
+          equals: normalizedName,
+          mode: 'insensitive',
+        },
+      },
+    });
+
+    if (duplicate) {
+      throw new ConflictException('该推荐标签名称已存在，请使用其他名称。');
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const next = await tx.assetTag.update({
+        where: { id },
+        data: {
+          name: normalizedName,
+          enabled: dto.enabled ?? existing.enabled,
+          sortOrder: dto.sortOrder ?? existing.sortOrder,
+        },
+      });
+
+      if (existing.name !== normalizedName) {
+        const memberAssets = await tx.memberAsset.findMany({
+          where: {
+            isDeleted: false,
+            tags: {
+              has: existing.name,
+            },
+          },
+          select: {
+            id: true,
+            tags: true,
+          },
+        });
+
+        for (const asset of memberAssets) {
+          const nextTags = Array.from(
+            new Set(asset.tags.map((tag) => (tag === existing.name ? normalizedName : tag))),
+          );
+
+          await tx.memberAsset.update({
+            where: { id: asset.id },
+            data: {
+              tags: {
+                set: nextTags,
+              },
+            },
+          });
+        }
+
+        const requestAssets = await tx.supplementRequestAsset.findMany({
+          where: {
+            tags: {
+              has: existing.name,
+            },
+          },
+          select: {
+            id: true,
+            tags: true,
+          },
+        });
+
+        for (const asset of requestAssets) {
+          const nextTags = Array.from(
+            new Set(asset.tags.map((tag) => (tag === existing.name ? normalizedName : tag))),
+          );
+
+          await tx.supplementRequestAsset.update({
+            where: { id: asset.id },
+            data: {
+              tags: {
+                set: nextTags,
+              },
+            },
+          });
+        }
+      }
+
+      return next;
+    });
+
+    await this.auditLogsService.log({
+      operatorId,
+      action: AuditAction.UPDATE,
+      targetType: 'ASSET_TAG',
+      targetId: id,
+      before: existing,
+      after: updated,
+    });
+
+    const [assetUseCount, requestUseCount] = await this.prisma.$transaction([
+      this.prisma.memberAsset.count({
+        where: {
+          isDeleted: false,
+          tags: {
+            has: updated.name,
+          },
+        },
+      }),
+      this.prisma.supplementRequestAsset.count({
+        where: {
+          tags: {
+            has: updated.name,
+          },
+        },
+      }),
+    ]);
+
+    return {
+      ...updated,
+      useCount: assetUseCount + requestUseCount,
+    };
+  }
+
+  async removeAssetTag(id: string, operatorId: string) {
+    const existing = await this.prisma.assetTag.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('未找到对应推荐标签。');
+    }
+
+    const [assetUseCount, requestUseCount] = await this.prisma.$transaction([
+      this.prisma.memberAsset.count({
+        where: {
+          isDeleted: false,
+          tags: {
+            has: existing.name,
+          },
+        },
+      }),
+      this.prisma.supplementRequestAsset.count({
+        where: {
+          tags: {
+            has: existing.name,
+          },
+        },
+      }),
+    ]);
+
+    const useCount = assetUseCount + requestUseCount;
+
+    if (useCount > 0) {
+      throw new ConflictException('该标签仍在资料中使用，请先停用或替换后再删除。');
+    }
+
+    await this.prisma.assetTag.delete({
+      where: { id },
+    });
+
+    await this.auditLogsService.log({
+      operatorId,
+      action: AuditAction.DELETE,
+      targetType: 'ASSET_TAG',
+      targetId: id,
+      before: existing,
+    });
+
+    return { success: true };
+  }
+
+  async createAssetSource(dto: UpsertAssetSourceDto, operatorId: string) {
+    const normalizedName = dto.name.trim();
+    if (!normalizedName) {
+      throw new BadRequestException('来源类型名称不能为空。');
+    }
+
+    const existing = await this.prisma.assetSource.findFirst({
+      where: {
+        name: {
+          equals: normalizedName,
+          mode: 'insensitive',
+        },
+      },
+    });
+
+    if (existing) {
+      throw new ConflictException('该来源类型已存在，请直接编辑现有来源。');
+    }
+
+    const created = await this.prisma.assetSource.create({
+      data: {
+        name: normalizedName,
+        enabled: dto.enabled ?? true,
+        sortOrder: dto.sortOrder ?? 0,
+      },
+    });
+
+    await this.auditLogsService.log({
+      operatorId,
+      action: AuditAction.CREATE,
+      targetType: 'ASSET_SOURCE',
+      targetId: created.id,
+      after: created,
+    });
+
+    return {
+      ...created,
+      useCount: 0,
+    };
+  }
+
+  async updateAssetSource(id: string, dto: UpsertAssetSourceDto, operatorId: string) {
+    const existing = await this.prisma.assetSource.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('未找到对应来源类型。');
+    }
+
+    const normalizedName = dto.name.trim();
+    if (!normalizedName) {
+      throw new BadRequestException('来源类型名称不能为空。');
+    }
+
+    const duplicate = await this.prisma.assetSource.findFirst({
+      where: {
+        id: {
+          not: id,
+        },
+        name: {
+          equals: normalizedName,
+          mode: 'insensitive',
+        },
+      },
+    });
+
+    if (duplicate) {
+      throw new ConflictException('该来源类型名称已存在，请使用其他名称。');
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const next = await tx.assetSource.update({
+        where: { id },
+        data: {
+          name: normalizedName,
+          enabled: dto.enabled ?? existing.enabled,
+          sortOrder: dto.sortOrder ?? existing.sortOrder,
+        },
+      });
+
+      if (existing.name !== normalizedName) {
+        const memberAssets = await tx.memberAsset.findMany({
+          where: {
+            isDeleted: false,
+            sourceType: existing.name,
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        for (const asset of memberAssets) {
+          await tx.memberAsset.update({
+            where: { id: asset.id },
+            data: {
+              sourceType: normalizedName,
+            },
+          });
+        }
+
+        const requestAssets = await tx.supplementRequestAsset.findMany({
+          where: {
+            sourceType: existing.name,
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        for (const asset of requestAssets) {
+          await tx.supplementRequestAsset.update({
+            where: { id: asset.id },
+            data: {
+              sourceType: normalizedName,
+            },
+          });
+        }
+      }
+
+      return next;
+    });
+
+    await this.auditLogsService.log({
+      operatorId,
+      action: AuditAction.UPDATE,
+      targetType: 'ASSET_SOURCE',
+      targetId: id,
+      before: existing,
+      after: updated,
+    });
+
+    const [assetUseCount, requestUseCount] = await this.prisma.$transaction([
+      this.prisma.memberAsset.count({
+        where: {
+          isDeleted: false,
+          sourceType: updated.name,
+        },
+      }),
+      this.prisma.supplementRequestAsset.count({
+        where: {
+          sourceType: updated.name,
+        },
+      }),
+    ]);
+
+    return {
+      ...updated,
+      useCount: assetUseCount + requestUseCount,
+    };
+  }
+
+  async removeAssetSource(id: string, operatorId: string) {
+    const existing = await this.prisma.assetSource.findUnique({
+      where: { id },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('未找到对应来源类型。');
+    }
+
+    const [assetUseCount, requestUseCount] = await this.prisma.$transaction([
+      this.prisma.memberAsset.count({
+        where: {
+          isDeleted: false,
+          sourceType: existing.name,
+        },
+      }),
+      this.prisma.supplementRequestAsset.count({
+        where: {
+          sourceType: existing.name,
+        },
+      }),
+    ]);
+
+    const useCount = assetUseCount + requestUseCount;
+
+    if (useCount > 0) {
+      throw new ConflictException('该来源类型仍在资料中使用，请先停用或替换后再删除。');
+    }
+
+    await this.prisma.assetSource.delete({
+      where: { id },
+    });
+
+    await this.auditLogsService.log({
+      operatorId,
+      action: AuditAction.DELETE,
+      targetType: 'ASSET_SOURCE',
+      targetId: id,
+      before: existing,
+    });
+
+    return { success: true };
+  }
+
+  async batchOperateAssets(dto: BatchAssetOperationDto, operatorId: string) {
+    if (!dto.assetIds || dto.assetIds.length === 0) {
+      throw new BadRequestException('请至少选择一项资料后再执行批量操作。');
+    }
+
+    const assets = await this.prisma.memberAsset.findMany({
+      where: {
+        id: {
+          in: dto.assetIds,
+        },
+        isDeleted: false,
+      },
+      select: {
+        id: true,
+        memberId: true,
+        filePath: true,
+        tags: true,
+        sourceType: true,
+      },
+    });
+
+    if (assets.length === 0) {
+      throw new NotFoundException('未找到可处理的资料记录。');
+    }
+
+    const foundIds = new Set(assets.map((asset) => asset.id));
+    const missingIds = dto.assetIds.filter((id) => !foundIds.has(id));
+
+    if (dto.action === 'APPEND_TAGS') {
+      const normalizedTags = this.normalizeAssetTags(dto.tags) ?? [];
+      if (normalizedTags.length === 0) {
+        throw new BadRequestException('批量打标签时至少需要提供一个标签。');
+      }
+
+      await this.prisma.$transaction(
+        assets.map((asset) =>
+          this.prisma.memberAsset.update({
+            where: { id: asset.id },
+            data: {
+              tags: {
+                set: Array.from(new Set([...asset.tags, ...normalizedTags])),
+              },
+            },
+          }),
+        ),
+      );
+
+      await this.auditLogsService.log({
+        operatorId,
+        action: AuditAction.UPDATE,
+        targetType: 'MEMBER_ASSET_BATCH',
+        metadata: {
+          action: dto.action,
+          assetIds: assets.map((asset) => asset.id),
+          missingIds,
+          tags: normalizedTags,
+          count: assets.length,
+        },
+      });
+
+      return {
+        success: true,
+        action: dto.action,
+        affectedCount: assets.length,
+      };
+    }
+
+    if (dto.action === 'SET_SOURCE_TYPE') {
+      const normalizedSourceType = this.normalizeNullableText(dto.sourceType);
+      if (!normalizedSourceType) {
+        throw new BadRequestException('批量设置来源类型时必须选择来源类型。');
+      }
+
+      const source = await this.prisma.assetSource.findFirst({
+        where: {
+          enabled: true,
+          name: {
+            equals: normalizedSourceType,
+            mode: 'insensitive',
+          },
+        },
+      });
+
+      if (!source) {
+        throw new BadRequestException('指定的来源类型不存在或已停用。');
+      }
+
+      await this.prisma.memberAsset.updateMany({
+        where: {
+          id: {
+            in: assets.map((asset) => asset.id),
+          },
+        },
+        data: {
+          sourceType: source.name,
+        },
+      });
+
+      await this.auditLogsService.log({
+        operatorId,
+        action: AuditAction.UPDATE,
+        targetType: 'MEMBER_ASSET_BATCH',
+        metadata: {
+          action: dto.action,
+          assetIds: assets.map((asset) => asset.id),
+          missingIds,
+          sourceType: source.name,
+          count: assets.length,
+        },
+      });
+
+      return {
+        success: true,
+        action: dto.action,
+        affectedCount: assets.length,
+      };
+    }
+
+    if (dto.action === 'DELETE') {
+      const uploadRoot = resolve(process.cwd(), process.env.UPLOAD_DIR ?? 'uploads');
+      for (const asset of assets) {
+        await unlink(resolve(uploadRoot, asset.filePath)).catch(() => undefined);
+      }
+
+      await this.prisma.memberAsset.updateMany({
+        where: {
+          id: {
+            in: assets.map((asset) => asset.id),
+          },
+        },
+        data: {
+          isDeleted: true,
+        },
+      });
+
+      await this.auditLogsService.log({
+        operatorId,
+        action: AuditAction.DELETE,
+        targetType: 'MEMBER_ASSET_BATCH',
+        metadata: {
+          action: dto.action,
+          assetIds: assets.map((asset) => asset.id),
+          missingIds,
+          count: assets.length,
+        },
+      });
+
+      return {
+        success: true,
+        action: dto.action,
+        affectedCount: assets.length,
+      };
+    }
+
+    throw new BadRequestException('暂不支持该批量操作。');
+  }
+
+  async importAssetsBatch(
+    dto: ImportAssetBatchDto,
+    files: Express.Multer.File[],
+    operatorId: string,
+  ) {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('请至少选择一个文件后再执行批量导入。');
+    }
+
+    const member = await this.prisma.member.findFirst({
+      where: {
+        id: dto.memberId,
+        isDeleted: false,
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+
+    if (!member) {
+      throw new NotFoundException('未找到导入目标成员。');
+    }
+
+    const normalizedAssetMetadata = this.normalizeAssetMetadata(dto);
+    const normalizedSourceType = normalizedAssetMetadata.sourceType ?? null;
+    const sourceTypeRecord = normalizedSourceType
+      ? await this.prisma.assetSource.findFirst({
+          where: {
+            enabled: true,
+            name: {
+              equals: normalizedSourceType,
+              mode: 'insensitive',
+            },
+          },
+        })
+      : null;
+
+    if (normalizedSourceType && !sourceTypeRecord) {
+      throw new BadRequestException('指定的来源类型不存在或已停用。');
+    }
+
+    const uploadRoot = resolve(process.cwd(), process.env.UPLOAD_DIR ?? 'uploads');
+    const directoryName =
+      dto.category === MemberAssetCategory.PHOTO
+        ? 'member-assets/photos'
+        : 'member-assets/documents';
+    const saveDirectory = resolve(uploadRoot, directoryName);
+    await mkdir(saveDirectory, { recursive: true });
+
+    const createdAssets: Array<{
+      id: string;
+      memberId: string;
+      uploadedById: string | null;
+      category: MemberAssetCategory;
+      filePath: string;
+      fileUrl: string | null;
+      originalName: string;
+      title: string | null;
+      sourceType: string | null;
+      source: string | null;
+      description: string | null;
+      tags: string[];
+      mimeType: string;
+      sizeBytes: number;
+      isDeleted: boolean;
+      createdAt: Date;
+      updatedAt: Date;
+    }> = [];
+    const failures: Array<{ originalName: string; message: string }> = [];
+
+    for (const [index, file] of files.entries()) {
+      let relativePath: string | null = null;
+      try {
+        this.validateAssetFile(file, dto.category);
+
+        const extension = extname(file.originalname || '') || '';
+        relativePath = `${directoryName}/${randomUUID()}${extension}`;
+        const absolutePath = resolve(uploadRoot, relativePath);
+        await writeFile(absolutePath, file.buffer);
+
+        const title = dto.titles?.[index]?.trim() || normalizedAssetMetadata.title;
+        const created = await this.prisma.memberAsset.create({
+          data: {
+            memberId: dto.memberId,
+            uploadedById: operatorId,
+            category: dto.category,
+            filePath: relativePath,
+            originalName: file.originalname,
+            title: title || null,
+            sourceType: sourceTypeRecord?.name ?? null,
+            source: normalizedAssetMetadata.source,
+            description: normalizedAssetMetadata.description,
+            tags: normalizedAssetMetadata.tags,
+            mimeType: file.mimetype,
+            sizeBytes: file.size,
+          },
+        });
+
+        createdAssets.push({
+          ...created,
+          fileUrl: buildUploadUrl(created.filePath),
+        });
+      } catch (error) {
+        if (relativePath) {
+          await unlink(resolve(uploadRoot, relativePath)).catch(() => undefined);
+        }
+
+        failures.push({
+          originalName: file.originalname,
+          message:
+            error instanceof Error && error.message
+              ? error.message
+              : '文件导入失败，请稍后重试。',
+        });
+      }
+    }
+
+    const auditLog = await this.auditLogsService.log({
+      operatorId,
+      action: AuditAction.UPLOAD_PHOTO,
+      targetType: 'MEMBER_ASSET_IMPORT_BATCH',
+      targetId: member.id,
+      metadata: {
+        memberId: member.id,
+        memberName: member.name,
+        category: dto.category,
+        totalCount: files.length,
+        successCount: createdAssets.length,
+        failedCount: failures.length,
+        sourceType: sourceTypeRecord?.name ?? null,
+        source: normalizedAssetMetadata.source,
+        tags: normalizedAssetMetadata.tags,
+        titles: dto.titles ?? [],
+        failures,
+        createdAssetIds: createdAssets.map((asset) => asset.id),
+      },
+    });
+
+    return {
+      auditLogId: auditLog.id,
+      memberId: member.id,
+      memberName: member.name,
+      category: dto.category,
+      totalCount: files.length,
+      successCount: createdAssets.length,
+      failedCount: failures.length,
+      createdAt: auditLog.createdAt,
+      createdAssets,
+      failures,
+    };
+  }
+
+  async listAssetImportBatches(query: AssetImportBatchQueryDto = {}) {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 8;
+    const where: Prisma.AuditLogWhereInput = {
+      targetType: 'MEMBER_ASSET_IMPORT_BATCH',
+    };
+
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.auditLog.count({ where }),
+      this.prisma.auditLog.findMany({
+        where,
+        include: {
+          operator: {
+            select: {
+              id: true,
+              username: true,
+              role: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    return {
+      total,
+      page,
+      pageSize,
+      data,
+    };
+  }
+
+  async listLibraryAssets(query: MemberAssetLibraryQueryDto = {}) {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 24;
+    let importBatchAssetIds: string[] | undefined;
+
+    if (query.importBatchId) {
+      const batchLog = await this.prisma.auditLog.findFirst({
+        where: {
+          id: query.importBatchId,
+          targetType: 'MEMBER_ASSET_IMPORT_BATCH',
+        },
+        select: {
+          metadata: true,
+        },
+      });
+
+      const createdAssetIds = Array.isArray(
+        (batchLog?.metadata as { createdAssetIds?: unknown } | null)?.createdAssetIds,
+      )
+        ? ((batchLog?.metadata as { createdAssetIds?: unknown[] }).createdAssetIds ?? [])
+            .map((item) => String(item))
+            .filter(Boolean)
+        : [];
+
+      importBatchAssetIds = createdAssetIds;
+    }
+
+    const where = this.buildAssetWhereInput(query, importBatchAssetIds);
+    const overviewWhere: Prisma.MemberAssetWhereInput = {
+      isDeleted: false,
+    };
+    const tagWhere: Prisma.MemberAssetWhereInput = {
+      isDeleted: false,
+      category: query.category,
+    };
+
+    const [
+      total,
+      data,
+      totalAssets,
+      totalPhotos,
+      totalDocuments,
+      taggedAssets,
+      sourcedAssets,
+      describedAssets,
+      linkedMembersResult,
+      tagAssetRows,
+    ] = await this.prisma.$transaction([
+      this.prisma.memberAsset.count({ where }),
+      this.prisma.memberAsset.findMany({
+        where,
+        include: {
+          member: {
+            select: {
+              id: true,
+              name: true,
+              gender: true,
+              generationName: true,
+              nativePlace: true,
+            },
+          },
+          uploadedBy: {
+            select: { id: true, username: true, role: true },
+          },
+        },
+        orderBy: [{ createdAt: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.memberAsset.count({ where: overviewWhere }),
+      this.prisma.memberAsset.count({
+        where: {
+          ...overviewWhere,
+          category: MemberAssetCategory.PHOTO,
+        },
+      }),
+      this.prisma.memberAsset.count({
+        where: {
+          ...overviewWhere,
+          category: MemberAssetCategory.DOCUMENT,
+        },
+      }),
+      this.prisma.memberAsset.count({
+        where: {
+          ...overviewWhere,
+          NOT: {
+            tags: {
+              isEmpty: true,
+            },
+          },
+        },
+      }),
+      this.prisma.memberAsset.count({
+        where: {
+          ...overviewWhere,
+          OR: [
+            {
+              sourceType: {
+                not: null,
+              },
+            },
+            {
+              source: {
+                not: null,
+              },
+            },
+          ],
+        },
+      }),
+      this.prisma.memberAsset.count({
+        where: {
+          ...overviewWhere,
+          description: {
+            not: null,
+          },
+        },
+      }),
+      this.prisma.memberAsset.findMany({
+        where: overviewWhere,
+        distinct: ['memberId'],
+        select: { memberId: true },
+      }),
+      this.prisma.memberAsset.findMany({
+        where: tagWhere,
+        select: { tags: true },
+      }),
+    ]);
+
+    const tagCounter = new Map<string, number>();
+    for (const row of tagAssetRows) {
+      for (const tag of row.tags) {
+        tagCounter.set(tag, (tagCounter.get(tag) ?? 0) + 1);
+      }
+    }
+
+    const tagBuckets = [...tagCounter.entries()]
+      .sort((left, right) => {
+        if (right[1] !== left[1]) {
+          return right[1] - left[1];
+        }
+
+        return left[0].localeCompare(right[0], 'zh-Hans-CN');
+      })
+      .slice(0, 30)
+      .map(([tag, count]) => ({
+        tag,
+        count,
+      }));
+
+    return {
+      total,
+      page,
+      pageSize,
+      overview: {
+        totalAssets,
+        totalPhotos,
+        totalDocuments,
+        taggedAssets,
+        sourcedAssets,
+        describedAssets,
+        linkedMembers: linkedMembersResult.length,
+      },
+      tagBuckets,
+      data: data.map((asset) => ({
+        ...asset,
+        fileUrl: buildUploadUrl(asset.filePath),
+      })),
+    };
   }
 
   async getTimeline(memberId: string) {
@@ -916,6 +1991,7 @@ export class MembersService {
     files: Express.Multer.File[],
     category: MemberAssetCategory,
     operatorId: string,
+    metadata?: UploadMemberAssetsDto,
   ) {
     if (!files || files.length === 0) {
       throw new BadRequestException('请至少选择一个文件后再上传。');
@@ -931,9 +2007,13 @@ export class MembersService {
     }
 
     const uploadRoot = resolve(process.cwd(), process.env.UPLOAD_DIR ?? 'uploads');
-    const directoryName = category === MemberAssetCategory.PHOTO ? 'member-assets/photos' : 'member-assets/documents';
+    const directoryName =
+      category === MemberAssetCategory.PHOTO
+        ? 'member-assets/photos'
+        : 'member-assets/documents';
     const saveDirectory = resolve(uploadRoot, directoryName);
     await mkdir(saveDirectory, { recursive: true });
+    const normalizedAssetMetadata = this.normalizeAssetMetadata(metadata);
 
     const createdAssets: Array<{
       id: string;
@@ -943,6 +2023,11 @@ export class MembersService {
       filePath: string;
       fileUrl: string | null;
       originalName: string;
+      title: string | null;
+      sourceType: string | null;
+      source: string | null;
+      description: string | null;
+      tags: string[];
       mimeType: string;
       sizeBytes: number;
       isDeleted: boolean;
@@ -964,6 +2049,11 @@ export class MembersService {
           category,
           filePath: relativePath,
           originalName: file.originalname,
+          title: normalizedAssetMetadata.title,
+          sourceType: normalizedAssetMetadata.sourceType,
+          source: normalizedAssetMetadata.source,
+          description: normalizedAssetMetadata.description,
+          tags: normalizedAssetMetadata.tags,
           mimeType: file.mimetype,
           sizeBytes: file.size,
         },
@@ -983,10 +2073,80 @@ export class MembersService {
       metadata: {
         category,
         count: createdAssets.length,
+        title: normalizedAssetMetadata.title,
+        sourceType: normalizedAssetMetadata.sourceType,
+        source: normalizedAssetMetadata.source,
+        tags: normalizedAssetMetadata.tags,
+        hasDescription: Boolean(normalizedAssetMetadata.description),
       },
     });
 
     return createdAssets;
+  }
+
+  async updateAsset(
+    memberId: string,
+    assetId: string,
+    dto: UpdateMemberAssetDto,
+    operatorId: string,
+  ) {
+    const asset = await this.prisma.memberAsset.findFirst({
+      where: {
+        id: assetId,
+        memberId,
+        isDeleted: false,
+      },
+      include: {
+        uploadedBy: {
+          select: { id: true, username: true, role: true },
+        },
+      },
+    });
+
+    if (!asset) {
+      throw new NotFoundException('未找到对应资源文件。');
+    }
+
+    const data = this.buildAssetUpdateData(dto);
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException('没有检测到可更新的资料信息。');
+    }
+
+    const updated = await this.prisma.memberAsset.update({
+      where: { id: assetId },
+      data,
+      include: {
+        uploadedBy: {
+          select: { id: true, username: true, role: true },
+        },
+      },
+    });
+
+    await this.auditLogsService.log({
+      operatorId,
+      action: AuditAction.UPDATE,
+      targetType: 'MEMBER_ASSET',
+      targetId: assetId,
+      before: {
+        title: asset.title,
+        sourceType: asset.sourceType,
+        source: asset.source,
+        description: asset.description,
+        tags: asset.tags,
+      },
+      after: {
+        title: updated.title,
+        sourceType: updated.sourceType,
+        source: updated.source,
+        description: updated.description,
+        tags: updated.tags,
+      },
+    });
+
+    return {
+      ...updated,
+      fileUrl: buildUploadUrl(updated.filePath),
+    };
   }
 
   async removeAsset(memberId: string, assetId: string, operatorId: string) {
@@ -1799,6 +2959,198 @@ export class MembersService {
     }
 
     throw new BadRequestException(`导入文件中的生命状态值“${value}”不合法。`);
+  }
+
+  private buildAssetWhereInput(
+    query: Pick<
+      MemberAssetLibraryQueryDto,
+      | 'category'
+      | 'keyword'
+      | 'tag'
+      | 'sourceType'
+      | 'hasSource'
+      | 'hasDescription'
+      | 'hasTags'
+      | 'importBatchId'
+    >,
+    importBatchAssetIds?: string[],
+  ): Prisma.MemberAssetWhereInput {
+    const normalizedKeyword = query.keyword?.trim();
+    const normalizedTag = query.tag?.trim();
+    const normalizedSourceType = query.sourceType?.trim();
+
+    return {
+      isDeleted: false,
+      id: importBatchAssetIds
+        ? {
+            in: importBatchAssetIds.length > 0 ? importBatchAssetIds : ['__never__'],
+          }
+        : undefined,
+      category: query.category,
+      sourceType: normalizedSourceType || undefined,
+      description:
+        query.hasDescription === true
+          ? {
+              not: null,
+            }
+          : undefined,
+      tags:
+        query.hasTags === true
+          ? normalizedTag
+            ? {
+                has: normalizedTag,
+              }
+            : {
+                isEmpty: false,
+              }
+          : normalizedTag
+            ? {
+                has: normalizedTag,
+              }
+            : undefined,
+      AND:
+        query.hasSource === true
+          ? [
+              {
+                OR: [
+                  {
+                    sourceType: {
+                      not: null,
+                    },
+                  },
+                  {
+                    source: {
+                      not: null,
+                    },
+                  },
+                ],
+              },
+            ]
+          : undefined,
+      OR: normalizedKeyword
+        ? [
+            {
+              originalName: {
+                contains: normalizedKeyword,
+                mode: 'insensitive',
+              },
+            },
+            {
+              title: {
+                contains: normalizedKeyword,
+                mode: 'insensitive',
+              },
+            },
+            {
+              sourceType: {
+                contains: normalizedKeyword,
+                mode: 'insensitive',
+              },
+            },
+            {
+              source: {
+                contains: normalizedKeyword,
+                mode: 'insensitive',
+              },
+            },
+            {
+              description: {
+                contains: normalizedKeyword,
+                mode: 'insensitive',
+              },
+            },
+            {
+              member: {
+                name: {
+                  contains: normalizedKeyword,
+                  mode: 'insensitive',
+                },
+              },
+            },
+            {
+              member: {
+                generationName: {
+                  contains: normalizedKeyword,
+                  mode: 'insensitive',
+                },
+              },
+            },
+            {
+              member: {
+                nativePlace: {
+                  contains: normalizedKeyword,
+                  mode: 'insensitive',
+                },
+              },
+            },
+          ]
+        : undefined,
+    };
+  }
+
+  private normalizeAssetMetadata(metadata?: MemberAssetMetadataDto) {
+    return {
+      sourceType: this.normalizeNullableText(metadata?.sourceType) ?? null,
+      title: this.normalizeNullableText(metadata?.title) ?? null,
+      source: this.normalizeNullableText(metadata?.source) ?? null,
+      description: this.normalizeNullableText(metadata?.description) ?? null,
+      tags: this.normalizeAssetTags(metadata?.tags) ?? [],
+    };
+  }
+
+  private buildAssetUpdateData(dto: UpdateMemberAssetDto): Prisma.MemberAssetUpdateInput {
+    const data: Prisma.MemberAssetUpdateInput = {};
+
+    if (dto.sourceType !== undefined) {
+      data.sourceType = this.normalizeNullableText(dto.sourceType);
+    }
+
+    if (dto.title !== undefined) {
+      data.title = this.normalizeNullableText(dto.title);
+    }
+
+    if (dto.source !== undefined) {
+      data.source = this.normalizeNullableText(dto.source);
+    }
+
+    if (dto.description !== undefined) {
+      data.description = this.normalizeNullableText(dto.description);
+    }
+
+    if (dto.tags !== undefined) {
+      data.tags = {
+        set: this.normalizeAssetTags(dto.tags) ?? [],
+      };
+    }
+
+    return data;
+  }
+
+  private normalizeNullableText(value?: string | null) {
+    if (value === undefined) {
+      return undefined;
+    }
+
+    if (value === null) {
+      return null;
+    }
+
+    const normalized = value.trim();
+    return normalized ? normalized : null;
+  }
+
+  private normalizeAssetTags(tags?: string[]) {
+    if (tags === undefined) {
+      return undefined;
+    }
+
+    return Array.from(
+      new Set(
+        tags
+          .map((tag) => tag.trim())
+          .filter(Boolean),
+      ),
+    ).slice(0, 12);
   }
 
   private validateAssetFile(file: Express.Multer.File, category: MemberAssetCategory) {

@@ -18,6 +18,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
+import { MemberAssetMetadataDto } from '../../members/dto/member.dto';
 
 export class SupplementMemberPatchDto {
   @IsOptional()
@@ -87,7 +88,7 @@ export class ReviewSupplementRequestDto {
   reviewComment?: string;
 }
 
-export class CreateSupplementAssetRequestDto {
+export class CreateSupplementAssetRequestDto extends MemberAssetMetadataDto {
   @IsString()
   memberId!: string;
 

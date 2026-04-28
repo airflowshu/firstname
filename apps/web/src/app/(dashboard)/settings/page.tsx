@@ -1,12 +1,26 @@
 'use client';
 
-import { PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { App, Button, Card, Form, Input, Modal, Select, Space, Table, Typography } from 'antd';
+import {
+  App,
+  Button,
+  Card,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Popconfirm,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Typography,
+} from 'antd';
 import { useEffect, useState } from 'react';
 import { AuthGuard } from '@/components/auth-guard';
 import { api, ApiError } from '@/lib/api';
-import type { KinshipAlias } from '@/lib/types';
+import type { AssetSourceRecord, AssetTagRecord, KinshipAlias } from '@/lib/types';
 
 const { Title, Text } = Typography;
 
@@ -15,11 +29,25 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [editingAlias, setEditingAlias] = useState<KinshipAlias | undefined>();
+  const [tagOpen, setTagOpen] = useState(false);
+  const [editingTag, setEditingTag] = useState<AssetTagRecord | undefined>();
+  const [sourceOpen, setSourceOpen] = useState(false);
+  const [editingSource, setEditingSource] = useState<AssetSourceRecord | undefined>();
   const [form] = Form.useForm();
+  const [tagForm] = Form.useForm();
+  const [sourceForm] = Form.useForm();
 
   const aliasesQuery = useQuery({
     queryKey: ['kinship-aliases'],
     queryFn: api.getKinshipAliases,
+  });
+  const assetTagsQuery = useQuery({
+    queryKey: ['asset-tags', 'all'],
+    queryFn: () => api.getAssetTags({ includeDisabled: true }),
+  });
+  const assetSourcesQuery = useQuery({
+    queryKey: ['asset-sources', 'all'],
+    queryFn: () => api.getAssetSources({ includeDisabled: true }),
   });
 
   const saveMutation = useMutation({
@@ -41,6 +69,64 @@ export default function SettingsPage() {
       message.error(error instanceof ApiError ? error.message : '保存称呼别名失败');
     },
   });
+  const saveTagMutation = useMutation({
+    mutationFn: async (payload: { name: string; enabled: boolean; sortOrder: number }) => {
+      if (editingTag) {
+        return api.updateAssetTag(editingTag.id, payload);
+      }
+
+      return api.createAssetTag(payload);
+    },
+    onSuccess: async () => {
+      message.success(editingTag ? '推荐标签已更新' : '推荐标签已创建');
+      setTagOpen(false);
+      setEditingTag(undefined);
+      tagForm.resetFields();
+      await queryClient.invalidateQueries({ queryKey: ['asset-tags'] });
+    },
+    onError: (error) => {
+      message.error(error instanceof ApiError ? error.message : '保存推荐标签失败');
+    },
+  });
+  const deleteTagMutation = useMutation({
+    mutationFn: (id: string) => api.deleteAssetTag(id),
+    onSuccess: async () => {
+      message.success('推荐标签已删除');
+      await queryClient.invalidateQueries({ queryKey: ['asset-tags'] });
+    },
+    onError: (error) => {
+      message.error(error instanceof ApiError ? error.message : '删除推荐标签失败');
+    },
+  });
+  const saveSourceMutation = useMutation({
+    mutationFn: async (payload: { name: string; enabled: boolean; sortOrder: number }) => {
+      if (editingSource) {
+        return api.updateAssetSource(editingSource.id, payload);
+      }
+
+      return api.createAssetSource(payload);
+    },
+    onSuccess: async () => {
+      message.success(editingSource ? '来源类型已更新' : '来源类型已创建');
+      setSourceOpen(false);
+      setEditingSource(undefined);
+      sourceForm.resetFields();
+      await queryClient.invalidateQueries({ queryKey: ['asset-sources'] });
+    },
+    onError: (error) => {
+      message.error(error instanceof ApiError ? error.message : '保存来源类型失败');
+    },
+  });
+  const deleteSourceMutation = useMutation({
+    mutationFn: (id: string) => api.deleteAssetSource(id),
+    onSuccess: async () => {
+      message.success('来源类型已删除');
+      await queryClient.invalidateQueries({ queryKey: ['asset-sources'] });
+    },
+    onError: (error) => {
+      message.error(error instanceof ApiError ? error.message : '删除来源类型失败');
+    },
+  });
 
   useEffect(() => {
     if (!open) {
@@ -56,6 +142,32 @@ export default function SettingsPage() {
     });
   }, [editingAlias, form, open]);
 
+  useEffect(() => {
+    if (!tagOpen) {
+      return;
+    }
+
+    tagForm.resetFields();
+    tagForm.setFieldsValue({
+      name: editingTag?.name,
+      enabled: editingTag?.enabled ?? true,
+      sortOrder: editingTag?.sortOrder ?? 0,
+    });
+  }, [editingTag, tagForm, tagOpen]);
+
+  useEffect(() => {
+    if (!sourceOpen) {
+      return;
+    }
+
+    sourceForm.resetFields();
+    sourceForm.setFieldsValue({
+      name: editingSource?.name,
+      enabled: editingSource?.enabled ?? true,
+      sortOrder: editingSource?.sortOrder ?? 0,
+    });
+  }, [editingSource, sourceForm, sourceOpen]);
+
   return (
     <AuthGuard requireAdmin>
       <div className="page-stack">
@@ -65,7 +177,7 @@ export default function SettingsPage() {
               系统设置
             </Title>
             <Text type="secondary">
-              第一版主要用于维护“标准称呼 → 家族叫法”的别名映射，支持方言或家族内部习惯称呼。
+              当前版本支持维护家族称呼别名、推荐标签词库和来源类型字典，帮助家族资料逐步形成统一可复用的治理规则。
             </Text>
           </Space>
         </Card>
@@ -118,6 +230,154 @@ export default function SettingsPage() {
           />
         </Card>
 
+        <Card
+          className="soft-panel"
+          title="资料推荐标签词库"
+          extra={
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setEditingTag(undefined);
+                tagForm.resetFields();
+                setTagOpen(true);
+              }}
+            >
+              新建推荐标签
+            </Button>
+          }
+        >
+          <Table
+            rowKey="id"
+            loading={assetTagsQuery.isLoading}
+            dataSource={assetTagsQuery.data ?? []}
+            columns={[
+              {
+                title: '标签名称',
+                dataIndex: 'name',
+                render: (value: string) => <Tag color="processing">{value}</Tag>,
+              },
+              {
+                title: '使用次数',
+                dataIndex: 'useCount',
+              },
+              {
+                title: '排序',
+                dataIndex: 'sortOrder',
+              },
+              {
+                title: '状态',
+                dataIndex: 'enabled',
+                render: (value: boolean) => (value ? '启用' : '停用'),
+              },
+              {
+                title: '操作',
+                render: (_: unknown, record: AssetTagRecord) => (
+                  <Space wrap>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setEditingTag(record);
+                        setTagOpen(true);
+                      }}
+                    >
+                      编辑
+                    </Button>
+                    <Popconfirm
+                      title="确定删除这个推荐标签吗？"
+                      description="如果该标签仍被资料使用，系统会阻止删除。"
+                      onConfirm={() => deleteTagMutation.mutate(record.id)}
+                    >
+                      <Button
+                        size="small"
+                        danger
+                        icon={<DeleteOutlined />}
+                        loading={deleteTagMutation.isPending}
+                      >
+                        删除
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                ),
+              },
+            ]}
+          />
+        </Card>
+
+        <Card
+          className="soft-panel"
+          title="资料来源类型字典"
+          extra={
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setEditingSource(undefined);
+                sourceForm.resetFields();
+                setSourceOpen(true);
+              }}
+            >
+              新建来源类型
+            </Button>
+          }
+        >
+          <Table
+            rowKey="id"
+            loading={assetSourcesQuery.isLoading}
+            dataSource={assetSourcesQuery.data ?? []}
+            columns={[
+              {
+                title: '来源类型',
+                dataIndex: 'name',
+                render: (value: string) => <Tag color="gold">{value}</Tag>,
+              },
+              {
+                title: '使用次数',
+                dataIndex: 'useCount',
+              },
+              {
+                title: '排序',
+                dataIndex: 'sortOrder',
+              },
+              {
+                title: '状态',
+                dataIndex: 'enabled',
+                render: (value: boolean) => (value ? '启用' : '停用'),
+              },
+              {
+                title: '操作',
+                render: (_: unknown, record: AssetSourceRecord) => (
+                  <Space wrap>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setEditingSource(record);
+                        setSourceOpen(true);
+                      }}
+                    >
+                      编辑
+                    </Button>
+                    <Popconfirm
+                      title="确定删除这个来源类型吗？"
+                      description="如果该来源仍被资料使用，系统会阻止删除。"
+                      onConfirm={() => deleteSourceMutation.mutate(record.id)}
+                    >
+                      <Button
+                        size="small"
+                        danger
+                        icon={<DeleteOutlined />}
+                        loading={deleteSourceMutation.isPending}
+                      >
+                        删除
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                ),
+              },
+            ]}
+          />
+        </Card>
+
         <Modal
           open={open}
           title={editingAlias ? `编辑别名映射：${editingAlias.relationCode}` : '新建家族称呼映射'}
@@ -150,6 +410,102 @@ export default function SettingsPage() {
               rules={[{ required: true, message: '请输入家族叫法' }]}
             >
               <Input placeholder="如：阿爸、阿公、大舅" />
+            </Form.Item>
+            <Form.Item
+              label="是否启用"
+              name="enabled"
+              rules={[{ required: true, message: '请选择状态' }]}
+            >
+              <Select
+                options={[
+                  { label: '启用', value: true },
+                  { label: '停用', value: false },
+                ]}
+              />
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        <Modal
+          open={tagOpen}
+          title={editingTag ? `编辑推荐标签：${editingTag.name}` : '新建推荐标签'}
+          confirmLoading={saveTagMutation.isPending}
+          onCancel={() => {
+            setTagOpen(false);
+            setEditingTag(undefined);
+          }}
+          onOk={() => tagForm.submit()}
+          destroyOnHidden
+        >
+          <Form
+            form={tagForm}
+            layout="vertical"
+            onFinish={(values) =>
+              saveTagMutation.mutate({
+                name: values.name,
+                enabled: values.enabled,
+                sortOrder: values.sortOrder,
+              })
+            }
+          >
+            <Form.Item
+              label="标签名称"
+              name="name"
+              rules={[{ required: true, message: '请输入标签名称' }]}
+              extra="建议使用简短、可复用、能长期沉淀的分类词，例如：合影、祖宅、毕业、墓碑。"
+            >
+              <Input placeholder="如：合影、证书、婚礼、祖宅" maxLength={20} />
+            </Form.Item>
+            <Form.Item label="排序值" name="sortOrder" extra="数值越小越靠前。">
+              <InputNumber min={0} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item
+              label="是否启用"
+              name="enabled"
+              rules={[{ required: true, message: '请选择状态' }]}
+            >
+              <Select
+                options={[
+                  { label: '启用', value: true },
+                  { label: '停用', value: false },
+                ]}
+              />
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        <Modal
+          open={sourceOpen}
+          title={editingSource ? `编辑来源类型：${editingSource.name}` : '新建来源类型'}
+          confirmLoading={saveSourceMutation.isPending}
+          onCancel={() => {
+            setSourceOpen(false);
+            setEditingSource(undefined);
+          }}
+          onOk={() => sourceForm.submit()}
+          destroyOnHidden
+        >
+          <Form
+            form={sourceForm}
+            layout="vertical"
+            onFinish={(values) =>
+              saveSourceMutation.mutate({
+                name: values.name,
+                enabled: values.enabled,
+                sortOrder: values.sortOrder,
+              })
+            }
+          >
+            <Form.Item
+              label="来源类型名称"
+              name="name"
+              rules={[{ required: true, message: '请输入来源类型名称' }]}
+              extra="建议使用标准来源类别，例如：族人提供、老相册翻拍、证件扫描、地方志摘录。"
+            >
+              <Input placeholder="如：族人提供、墓碑抄录、口述整理" maxLength={30} />
+            </Form.Item>
+            <Form.Item label="排序值" name="sortOrder" extra="数值越小越靠前。">
+              <InputNumber min={0} style={{ width: '100%' }} />
             </Form.Item>
             <Form.Item
               label="是否启用"

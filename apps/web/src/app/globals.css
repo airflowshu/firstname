@@ -316,6 +316,30 @@ a {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(234, 216, 189, 0.9);
+  background: linear-gradient(180deg, rgba(255, 252, 247, 0.92), rgba(248, 239, 222, 0.78));
+  min-width: 0;
+}
+
+.member-asset-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.member-asset-toolbar-actions {
+  justify-content: flex-end;
+}
+
+.member-asset-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
 }
 
 .member-asset-footer {
@@ -323,6 +347,168 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.member-asset-subtitle {
+  display: block;
+  line-height: 1.5;
+}
+
+.member-asset-description {
+  margin: 0 !important;
+  color: #5f4937 !important;
+  line-height: 1.65;
+}
+
+.member-asset-list-desc {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.member-asset-inline-note {
+  border-radius: 12px;
+  border: 1px solid rgba(234, 216, 189, 0.92);
+  background: rgba(250, 245, 236, 0.8);
+  padding: 12px 14px;
+}
+
+.member-request-asset-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.member-request-asset-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.asset-library-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.asset-library-tag-wall {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.asset-batch-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(123, 31, 31, 0.16);
+  background: linear-gradient(180deg, rgba(255, 248, 241, 0.88), rgba(247, 236, 216, 0.72));
+}
+
+.asset-library-filter-tag {
+  cursor: pointer;
+  margin-inline-end: 0 !important;
+}
+
+.asset-library-card {
+  height: 100%;
+  border-radius: 18px !important;
+  overflow: hidden;
+  border: 1px solid rgba(234, 216, 189, 0.92) !important;
+  background: linear-gradient(180deg, rgba(255, 251, 245, 0.96), rgba(247, 236, 216, 0.86)) !important;
+}
+
+.asset-library-card-selected {
+  border-color: rgba(123, 31, 31, 0.5) !important;
+  box-shadow: 0 0 0 2px rgba(123, 31, 31, 0.08);
+}
+
+.asset-library-card .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 320px;
+}
+
+.asset-library-cover {
+  height: 220px;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(128, 39, 39, 0.12), rgba(44, 72, 102, 0.08));
+}
+
+.asset-library-cover .ant-image,
+.asset-library-cover .ant-image-img {
+  width: 100%;
+  height: 220px;
+}
+
+.asset-library-cover-doc {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px;
+}
+
+.asset-library-doc-name {
+  text-align: center;
+  line-height: 1.5;
+}
+
+.asset-library-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1 1 auto;
+}
+
+.asset-library-select {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.asset-library-title {
+  margin: 0 !important;
+  color: #4f2719 !important;
+  line-height: 1.4 !important;
+}
+
+.asset-library-subline {
+  display: block;
+  line-height: 1.55;
+}
+
+.asset-library-description {
+  margin: 0 !important;
+  color: #5f4937 !important;
+  line-height: 1.7;
+}
+
+.asset-library-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  flex-wrap: wrap;
+}
+
+.asset-library-admin-actions {
+  margin-top: 4px;
+}
+
+.asset-library-pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
 }
 
 .member-event-item {
@@ -428,5 +614,18 @@ a {
 
   .graph-panel {
     min-height: 480px;
+  }
+
+  .member-asset-toolbar-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .asset-library-card .ant-card-body {
+    min-height: auto;
+  }
+
+  .asset-batch-toolbar {
+    align-items: flex-start;
   }
 }
