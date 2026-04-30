@@ -6,6 +6,7 @@ import type {
   AssetTagRecord,
   AssetImportBatchListResponse,
   AssetImportBatchResult,
+  AssetImportPrecheckResult,
   AuthUser,
   DashboardSummary,
   DuplicateMemberCheckResult,
@@ -23,7 +24,6 @@ import type {
   MembersResponse,
   UserRecord,
 } from './types';
-import { TOKEN_STORAGE_KEY } from './constants';
 
 export class ApiError extends Error {
   status: number;
@@ -37,19 +37,111 @@ export class ApiError extends Error {
 type RequestOptions = RequestInit & {
   token?: string | null;
   responseType?: 'json' | 'blob';
+  skipAuthRefresh?: boolean;
 };
 
-function getStoredToken() {
+let runtimeAccessToken: string | null = null;
+
+export function getRuntimeAccessToken() {
+  return runtimeAccessToken;
+}
+
+export function setRuntimeAccessToken(token: string | null) {
+  runtimeAccessToken = token;
+}
+
+function getApiBaseUrl() {
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+}
+
+function clearStoredAuth() {
+  setRuntimeAccessToken(null);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('fisrtname:auth-cleared'));
+  }
+}
+
+async function parseErrorMessage(response: Response) {
+  let message = `请求失败：${response.status}`;
+
+  try {
+    const errorBody = (await response.json()) as { message?: string | string[] };
+    if (Array.isArray(errorBody.message)) {
+      message = errorBody.message.join('；');
+    } else if (errorBody.message) {
+      message = errorBody.message;
+    }
+  } catch {
+    // ignore parse failure
+  }
+
+  return message;
+}
+
+function shouldTryRefresh(path: string, options: RequestOptions) {
+  if (options.skipAuthRefresh) {
+    return false;
+  }
+
+  return path !== '/auth/login' && path !== '/auth/refresh';
+}
+
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken() {
   if (typeof window === 'undefined') {
     return null;
   }
 
-  return localStorage.getItem(TOKEN_STORAGE_KEY);
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  refreshPromise = (async () => {
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        cache: 'no-store',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        clearStoredAuth();
+        return null;
+      }
+
+      const payload = (await response.json()) as {
+        accessToken: string;
+        user?: AuthUser;
+      };
+
+      setRuntimeAccessToken(payload.accessToken);
+      window.dispatchEvent(
+        new CustomEvent('fisrtname:token-refreshed', {
+          detail: {
+            token: payload.accessToken,
+            user: payload.user,
+          },
+        }),
+      );
+      return payload.accessToken;
+    } catch {
+      clearStoredAuth();
+      return null;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers ?? {});
-  const token = options.token ?? getStoredToken();
+  const token = options.token ?? getRuntimeAccessToken();
 
   if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
@@ -60,28 +152,29 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${path}`,
+    `${getApiBaseUrl()}${path}`,
     {
       ...options,
       headers,
       cache: 'no-store',
+      credentials: 'include',
     },
   );
 
-  if (!response.ok) {
-    let message = `请求失败：${response.status}`;
+  if (response.status === 401 && shouldTryRefresh(path, options)) {
+    const refreshedToken = await refreshAccessToken();
 
-    try {
-      const errorBody = (await response.json()) as { message?: string | string[] };
-      if (Array.isArray(errorBody.message)) {
-        message = errorBody.message.join('；');
-      } else if (errorBody.message) {
-        message = errorBody.message;
-      }
-    } catch {
-      // ignore parse failure
+    if (refreshedToken) {
+      return request<T>(path, {
+        ...options,
+        token: refreshedToken,
+        skipAuthRefresh: true,
+      });
     }
+  }
 
+  if (!response.ok) {
+    const message = await parseErrorMessage(response);
     throw new ApiError(message, response.status);
   }
 
@@ -99,15 +192,32 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 export const api = {
   getSystemInfo: () =>
     request<{ name: string; version: string; status: string; timestamp: string }>('/'),
-  login: (payload: { username: string; password: string }) =>
-    request<{ accessToken: string; user: AuthUser }>('/auth/login', {
+  login: async (payload: { username: string; password: string }) => {
+    const result = await request<{ accessToken: string; user: AuthUser }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(payload),
-    }),
-  logout: () =>
-    request<{ success: boolean }>('/auth/logout', {
+      skipAuthRefresh: true,
+    });
+    setRuntimeAccessToken(result.accessToken);
+    return result;
+  },
+  refresh: async () => {
+    const result = await request<{ accessToken: string; user: AuthUser }>('/auth/refresh', {
       method: 'POST',
-    }),
+      skipAuthRefresh: true,
+    });
+    setRuntimeAccessToken(result.accessToken);
+    return result;
+  },
+  logout: async () => {
+    try {
+      return await request<{ success: boolean }>('/auth/logout', {
+        method: 'POST',
+      });
+    } finally {
+      clearStoredAuth();
+    }
+  },
   me: (token?: string | null) => request<AuthUser>('/auth/me', { token }),
   getDashboardSummary: () => request<DashboardSummary>('/dashboard/summary'),
   getMembers: (params: Record<string, string | number | boolean | undefined>) => {
@@ -260,6 +370,45 @@ export const api = {
     });
 
     return request<AssetImportBatchResult>('/assets/import-batch', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+  importAssetsPrecheck: (
+    payload: {
+      memberId: string;
+      category: 'PHOTO' | 'DOCUMENT';
+      files: File[];
+      sourceType?: string;
+      source?: string;
+      tags?: string[];
+      description?: string;
+      titles?: string[];
+    },
+  ) => {
+    const formData = new FormData();
+    formData.append('memberId', payload.memberId);
+    formData.append('category', payload.category);
+    if (payload.sourceType !== undefined) {
+      formData.append('sourceType', payload.sourceType);
+    }
+    if (payload.source !== undefined) {
+      formData.append('source', payload.source);
+    }
+    if (payload.description !== undefined) {
+      formData.append('description', payload.description);
+    }
+    if (payload.tags) {
+      formData.append('tags', JSON.stringify(payload.tags));
+    }
+    if (payload.titles) {
+      formData.append('titles', JSON.stringify(payload.titles));
+    }
+    payload.files.forEach((file) => {
+      formData.append('files', file);
+    });
+
+    return request<AssetImportPrecheckResult>('/assets/import-precheck', {
       method: 'POST',
       body: formData,
     });

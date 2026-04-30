@@ -23,12 +23,21 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
-import { buildPairKey, buildPhotoUrl, buildUploadUrl } from '../common/utils/family-tree.util';
+import {
+  buildFileChecksum,
+  buildPairKey,
+  buildPhotoUrl,
+  buildUploadUrl,
+} from '../common/utils/family-tree.util';
 import type { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
 import { DASHBOARD_SUMMARY_CACHE_KEY } from '../dashboard/dashboard.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BatchAssetOperationDto } from './dto/asset-batch.dto';
-import { AssetImportBatchQueryDto, ImportAssetBatchDto } from './dto/asset-import.dto';
+import {
+  AssetImportBatchQueryDto,
+  AssetImportPrecheckDto,
+  ImportAssetBatchDto,
+} from './dto/asset-import.dto';
 import { AssetSourceQueryDto, UpsertAssetSourceDto } from './dto/asset-source.dto';
 import { AssetTagQueryDto, UpsertAssetTagDto } from './dto/asset-tag.dto';
 import {
@@ -1054,6 +1063,222 @@ export class MembersService {
     throw new BadRequestException('暂不支持该批量操作。');
   }
 
+  async precheckAssetImport(dto: AssetImportPrecheckDto, files: Express.Multer.File[]) {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('请至少选择一个文件后再执行导入预检查。');
+    }
+
+    const member = await this.prisma.member.findFirst({
+      where: {
+        id: dto.memberId,
+        isDeleted: false,
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+
+    if (!member) {
+      throw new NotFoundException('未找到导入目标成员。');
+    }
+
+    const normalizedAssetMetadata = this.normalizeAssetMetadata(dto);
+    const normalizedSourceType = normalizedAssetMetadata.sourceType ?? null;
+
+    if (normalizedSourceType) {
+      const sourceTypeRecord = await this.prisma.assetSource.findFirst({
+        where: {
+          enabled: true,
+          name: {
+            equals: normalizedSourceType,
+            mode: 'insensitive',
+          },
+        },
+      });
+
+      if (!sourceTypeRecord) {
+        throw new BadRequestException('指定的来源类型不存在或已停用。');
+      }
+    }
+
+    const precheckItems = files.map((file, index) => {
+      const issues: Array<{
+        code: string;
+        severity: 'warning' | 'error';
+        message: string;
+      }> = [];
+
+      try {
+        this.validateAssetFile(file, dto.category);
+      } catch (error) {
+        issues.push({
+          code: 'INVALID_FILE_TYPE',
+          severity: 'error',
+          message:
+            error instanceof Error && error.message
+              ? error.message
+              : '文件类型不支持，无法导入。',
+        });
+      }
+
+      return {
+        inputIndex: index,
+        originalName: file.originalname,
+        sizeBytes: file.size,
+        mimeType: file.mimetype,
+        checksum: buildFileChecksum(file.buffer),
+        resolvedTitle:
+          dto.titles?.[index]?.trim() || this.deriveDefaultAssetTitle(file.originalname),
+        issues,
+      };
+    });
+
+    const checksums = [...new Set(precheckItems.map((item) => item.checksum))];
+    const originalNames = [...new Set(precheckItems.map((item) => item.originalName))];
+    const titles = [...new Set(precheckItems.map((item) => item.resolvedTitle).filter(Boolean))];
+    const sizeBytesList = [...new Set(precheckItems.map((item) => item.sizeBytes))];
+
+    const candidateAssets = await this.prisma.memberAsset.findMany({
+      where: {
+        isDeleted: false,
+        category: dto.category,
+        OR: [
+          { checksum: { in: checksums } },
+          { originalName: { in: originalNames } },
+          { title: { in: titles } },
+          { sizeBytes: { in: sizeBytesList } },
+        ],
+      },
+      select: {
+        id: true,
+        memberId: true,
+        originalName: true,
+        title: true,
+        sizeBytes: true,
+        mimeType: true,
+        checksum: true,
+        member: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    const batchChecksumCount = new Map<string, number>();
+    const batchTitleCount = new Map<string, number>();
+    for (const item of precheckItems) {
+      batchChecksumCount.set(item.checksum, (batchChecksumCount.get(item.checksum) ?? 0) + 1);
+      batchTitleCount.set(item.resolvedTitle, (batchTitleCount.get(item.resolvedTitle) ?? 0) + 1);
+    }
+
+    const items = precheckItems.map((item) => {
+      const issues: Array<{
+        code: string;
+        severity: 'warning' | 'error';
+        message: string;
+        relatedMemberName?: string;
+        relatedAssetId?: string;
+      }> = [...item.issues];
+
+      if ((batchChecksumCount.get(item.checksum) ?? 0) > 1) {
+        issues.push({
+          code: 'DUPLICATE_IN_BATCH',
+          severity: 'warning',
+          message: '本批次中存在内容完全相同的重复文件。',
+        });
+      }
+
+      if ((batchTitleCount.get(item.resolvedTitle) ?? 0) > 1) {
+        issues.push({
+          code: 'TITLE_COLLISION_IN_BATCH',
+          severity: 'warning',
+          message: `本批次中存在重复标题：${item.resolvedTitle}`,
+        });
+      }
+
+      for (const asset of candidateAssets) {
+        const checksumMatched = Boolean(asset.checksum && asset.checksum === item.checksum);
+        const nameSizeMatched =
+          asset.originalName === item.originalName &&
+          asset.sizeBytes === item.sizeBytes &&
+          asset.mimeType === item.mimeType;
+        const titleMatched = Boolean(item.resolvedTitle && asset.title === item.resolvedTitle);
+
+        if (!checksumMatched && !nameSizeMatched && !titleMatched) {
+          continue;
+        }
+
+        if (asset.memberId === dto.memberId) {
+          if (checksumMatched || nameSizeMatched) {
+            issues.push({
+              code: 'DUPLICATE_EXISTING_SAME_MEMBER',
+              severity: 'warning',
+              message: `当前成员名下已存在疑似重复资料：${asset.title || asset.originalName}`,
+              relatedMemberName: asset.member.name,
+              relatedAssetId: asset.id,
+            });
+          } else if (titleMatched) {
+            issues.push({
+              code: 'TITLE_COLLISION_EXISTING_SAME_MEMBER',
+              severity: 'warning',
+              message: `当前成员名下已存在同名资料标题：${item.resolvedTitle}`,
+              relatedMemberName: asset.member.name,
+              relatedAssetId: asset.id,
+            });
+          }
+        } else if (checksumMatched || nameSizeMatched) {
+          issues.push({
+            code: 'DUPLICATE_EXISTING_OTHER_MEMBER',
+            severity: 'warning',
+            message: `其他成员名下存在疑似相同资料：${asset.member.name} / ${
+              asset.title || asset.originalName
+            }`,
+            relatedMemberName: asset.member.name,
+            relatedAssetId: asset.id,
+          });
+        }
+      }
+
+        return {
+          ...item,
+          issues,
+          status: issues.some((issue) => issue.severity === 'error')
+            ? 'error'
+            : issues.length > 0
+              ? 'warning'
+              : 'safe',
+        };
+      });
+
+    return {
+      memberId: member.id,
+      memberName: member.name,
+      category: dto.category,
+      totalCount: items.length,
+      errorCount: items.filter((item) => item.status === 'error').length,
+      warningCount: items.filter((item) => item.issues.length > 0).length,
+      duplicateInBatchCount: items.filter((item) =>
+        item.issues.some((issue) => issue.code === 'DUPLICATE_IN_BATCH'),
+      ).length,
+      duplicateExistingCount: items.filter((item) =>
+        item.issues.some((issue) =>
+          ['DUPLICATE_EXISTING_SAME_MEMBER', 'DUPLICATE_EXISTING_OTHER_MEMBER'].includes(
+            issue.code,
+          ),
+        ),
+      ).length,
+      titleCollisionCount: items.filter((item) =>
+        item.issues.some((issue) =>
+          ['TITLE_COLLISION_IN_BATCH', 'TITLE_COLLISION_EXISTING_SAME_MEMBER'].includes(issue.code),
+        ),
+      ).length,
+      items,
+    };
+  }
+
   async importAssetsBatch(
     dto: ImportAssetBatchDto,
     files: Express.Multer.File[],
@@ -1117,13 +1342,14 @@ export class MembersService {
       source: string | null;
       description: string | null;
       tags: string[];
+      checksum: string | null;
       mimeType: string;
       sizeBytes: number;
       isDeleted: boolean;
       createdAt: Date;
       updatedAt: Date;
     }> = [];
-    const failures: Array<{ originalName: string; message: string }> = [];
+    const failures: Array<{ inputIndex: number; originalName: string; message: string }> = [];
 
     for (const [index, file] of files.entries()) {
       let relativePath: string | null = null;
@@ -1136,6 +1362,7 @@ export class MembersService {
         await writeFile(absolutePath, file.buffer);
 
         const title = dto.titles?.[index]?.trim() || normalizedAssetMetadata.title;
+        const checksum = buildFileChecksum(file.buffer);
         const created = await this.prisma.memberAsset.create({
           data: {
             memberId: dto.memberId,
@@ -1143,6 +1370,7 @@ export class MembersService {
             category: dto.category,
             filePath: relativePath,
             originalName: file.originalname,
+            checksum,
             title: title || null,
             sourceType: sourceTypeRecord?.name ?? null,
             source: normalizedAssetMetadata.source,
@@ -1163,6 +1391,7 @@ export class MembersService {
         }
 
         failures.push({
+          inputIndex: index,
           originalName: file.originalname,
           message:
             error instanceof Error && error.message
@@ -2028,6 +2257,7 @@ export class MembersService {
       source: string | null;
       description: string | null;
       tags: string[];
+      checksum: string | null;
       mimeType: string;
       sizeBytes: number;
       isDeleted: boolean;
@@ -2041,6 +2271,7 @@ export class MembersService {
       const relativePath = `${directoryName}/${randomUUID()}${extension}`;
       const absolutePath = resolve(uploadRoot, relativePath);
       await writeFile(absolutePath, file.buffer);
+      const checksum = buildFileChecksum(file.buffer);
 
       const created = await this.prisma.memberAsset.create({
         data: {
@@ -2049,6 +2280,7 @@ export class MembersService {
           category,
           filePath: relativePath,
           originalName: file.originalname,
+          checksum,
           title: normalizedAssetMetadata.title,
           sourceType: normalizedAssetMetadata.sourceType,
           source: normalizedAssetMetadata.source,
@@ -3137,6 +3369,15 @@ export class MembersService {
 
     const normalized = value.trim();
     return normalized ? normalized : null;
+  }
+
+  private deriveDefaultAssetTitle(originalName: string) {
+    const normalized = originalName.trim();
+    if (!normalized) {
+      return '未命名资料';
+    }
+
+    return normalized.replace(/\.[^.]+$/, '').trim() || normalized;
   }
 
   private normalizeAssetTags(tags?: string[]) {

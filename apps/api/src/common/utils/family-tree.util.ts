@@ -1,4 +1,5 @@
 import { Gender, MarriageStatus } from '@prisma/client';
+import { createHash } from 'node:crypto';
 
 export interface FamilyMemberSnapshot {
   id: string;
@@ -79,6 +80,10 @@ export function buildUploadUrl(filePath: string | null | undefined) {
   }
 
   return `/uploads/${filePath.replace(/\\/g, '/')}`;
+}
+
+export function buildFileChecksum(buffer: Buffer) {
+  return createHash('sha256').update(buffer).digest('hex');
 }
 
 function compareByBirthOrder(left: FamilyMemberSnapshot, right: FamilyMemberSnapshot) {

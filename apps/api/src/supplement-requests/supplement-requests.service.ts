@@ -16,7 +16,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
-import { buildUploadUrl } from '../common/utils/family-tree.util';
+import { buildFileChecksum, buildUploadUrl } from '../common/utils/family-tree.util';
 import type { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateMemberDto } from '../members/dto/member.dto';
@@ -241,6 +241,7 @@ export class SupplementRequestsService {
             category: dto.category,
             filePath: relativePath,
             originalName: file.originalname,
+            checksum: buildFileChecksum(file.buffer),
             title: normalizedAssetMetadata.title,
             sourceType: normalizedAssetMetadata.sourceType,
             source: normalizedAssetMetadata.source,
@@ -337,6 +338,7 @@ export class SupplementRequestsService {
                 category: asset.category,
                 filePath: asset.filePath,
                 originalName: asset.originalName,
+                checksum: asset.checksum,
                 title: asset.title,
                 sourceType: asset.sourceType,
                 source: asset.source,
@@ -399,6 +401,7 @@ export class SupplementRequestsService {
         category: MemberAssetCategory;
         filePath: string;
         originalName: string;
+        checksum: string | null;
         title: string | null;
         sourceType: string | null;
         source: string | null;

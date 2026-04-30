@@ -73,3 +73,5 @@ export class AssetImportBatchQueryDto {
   @Min(1)
   pageSize?: number = 8;
 }
+
+export class AssetImportPrecheckDto extends ImportAssetBatchDto {}

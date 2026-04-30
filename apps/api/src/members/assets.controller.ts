@@ -16,7 +16,11 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
 import { BatchAssetOperationDto } from './dto/asset-batch.dto';
-import { AssetImportBatchQueryDto, ImportAssetBatchDto } from './dto/asset-import.dto';
+import {
+  AssetImportBatchQueryDto,
+  AssetImportPrecheckDto,
+  ImportAssetBatchDto,
+} from './dto/asset-import.dto';
 import { AssetSourceQueryDto, UpsertAssetSourceDto } from './dto/asset-source.dto';
 import { AssetTagQueryDto, UpsertAssetTagDto } from './dto/asset-tag.dto';
 import { MemberAssetLibraryQueryDto } from './dto/member.dto';
@@ -93,6 +97,22 @@ export class AssetsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.membersService.batchOperateAssets(dto, user.sub);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Post('import-precheck')
+  @UseInterceptors(
+    FilesInterceptor('files', 12, {
+      limits: {
+        fileSize: 20 * 1024 * 1024,
+      },
+    }),
+  )
+  importPrecheck(
+    @UploadedFiles() files: Express.Multer.File[],
+    @Body() dto: AssetImportPrecheckDto,
+  ) {
+    return this.membersService.precheckAssetImport(dto, files);
   }
 
   @Roles(UserRole.ADMIN)

@@ -5,9 +5,9 @@ services:
     environment:
       POSTGRES_DB: fisrtname
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     ports:
-      - '5432:5432'
+      - '127.0.0.1:${POSTGRES_PORT:-5432}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,18 +22,28 @@ services:
       dockerfile: apps/api/Dockerfile
     container_name: fisrtname-api
     environment:
+      NODE_ENV: ${NODE_ENV:-production}
       API_PORT: 3001
-      JWT_SECRET: please_change_me
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/fisrtname?schema=public
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_ACCESS_TOKEN_EXPIRES_IN: ${JWT_ACCESS_TOKEN_EXPIRES_IN:-12h}
+      JWT_REFRESH_TOKEN_EXPIRES_IN: ${JWT_REFRESH_TOKEN_EXPIRES_IN:-7d}
+      REFRESH_TOKEN_COOKIE_NAME: ${REFRESH_TOKEN_COOKIE_NAME:-fisrtname_rt}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/fisrtname?schema=public
       UPLOAD_DIR: /app/uploads
-      CORS_ORIGIN: http://localhost
+      SERVE_PUBLIC_UPLOADS: ${SERVE_PUBLIC_UPLOADS:-false}
+      ENABLE_SWAGGER: ${ENABLE_SWAGGER:-false}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+      LOGIN_THROTTLE_LIMIT: ${LOGIN_THROTTLE_LIMIT:-5}
+      LOGIN_THROTTLE_TTL_MS: ${LOGIN_THROTTLE_TTL_MS:-60000}
+      GLOBAL_THROTTLE_LIMIT: ${GLOBAL_THROTTLE_LIMIT:-120}
+      GLOBAL_THROTTLE_TTL_MS: ${GLOBAL_THROTTLE_TTL_MS:-60000}
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - ./uploads:/app/uploads
     ports:
-      - '3001:3001'
+      - '127.0.0.1:3001:3001'
 
   web:
     build:
@@ -45,7 +55,7 @@ services:
     depends_on:
       - api
     ports:
-      - '3000:3000'
+      - '127.0.0.1:3000:3000'
 
   nginx:
     image: nginx:1.27-alpine

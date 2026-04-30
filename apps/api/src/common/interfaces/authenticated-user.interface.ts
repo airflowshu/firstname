@@ -4,4 +4,5 @@ export interface AuthenticatedUser {
   sub: string;
   username: string;
   role: UserRole;
+  tokenVersion: number;
 }

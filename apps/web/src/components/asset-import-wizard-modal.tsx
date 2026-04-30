@@ -28,6 +28,18 @@ const { Paragraph, Text } = Typography;
 
 type ImportTitleMode = 'ORIGINAL_NAME' | 'PREFIX_INDEX' | 'PREFIX_FILENAME';
 
+export interface AssetImportWizardDraft {
+  memberId: string;
+  category: 'PHOTO' | 'DOCUMENT';
+  files: File[];
+  sourceType?: string;
+  source?: string;
+  tags: string[];
+  description?: string;
+  titleMode: ImportTitleMode;
+  titlePrefix?: string;
+}
+
 function normalizeTags(tags?: string[]) {
   return Array.from(
     new Set(
@@ -68,11 +80,15 @@ function buildResolvedTitle(
 export function AssetImportWizardModal({
   open,
   loading,
+  initialDraft,
+  initialStep = 0,
   onCancel,
   onSubmit,
 }: {
   open: boolean;
   loading?: boolean;
+  initialDraft?: AssetImportWizardDraft | null;
+  initialStep?: number;
   onCancel: () => void;
   onSubmit: (payload: {
     memberId: string;
@@ -90,6 +106,7 @@ export function AssetImportWizardModal({
   const [form] = Form.useForm();
   const [currentStep, setCurrentStep] = useState(0);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [precheckError, setPrecheckError] = useState<string | null>(null);
   const tagSuggestionsQuery = useQuery({
     queryKey: ['asset-tags', 'enabled'],
     queryFn: () => api.getAssetTags(),
@@ -99,8 +116,52 @@ export function AssetImportWizardModal({
     queryFn: () => api.getAssetSources(),
   });
   const category = Form.useWatch('category', form) as 'PHOTO' | 'DOCUMENT' | undefined;
+  const memberId = Form.useWatch('memberId', form) as string | undefined;
+  const sourceType = Form.useWatch('sourceType', form) as string | undefined;
+  const source = Form.useWatch('source', form) as string | undefined;
+  const tags = Form.useWatch('tags', form) as string[] | undefined;
+  const description = Form.useWatch('description', form) as string | undefined;
   const titleMode = (Form.useWatch('titleMode', form) as ImportTitleMode | undefined) ?? 'ORIGINAL_NAME';
   const titlePrefix = Form.useWatch('titlePrefix', form) as string | undefined;
+  const precheckMutation = useQuery({
+    queryKey: [
+      'asset-import-precheck',
+      currentStep,
+      memberId,
+      category,
+      sourceType,
+      source,
+      JSON.stringify(tags ?? []),
+      description,
+      JSON.stringify(
+        fileList.map((item, index) => ({
+          name: item.name,
+          size: item.size,
+          type: item.type,
+          title: buildResolvedTitle(titleMode, item.name, index, titlePrefix),
+        })),
+      ),
+    ],
+    enabled: false,
+    queryFn: async () => {
+      const files = fileList
+        .map((item) => item.originFileObj)
+        .filter(Boolean) as File[];
+
+      return api.importAssetsPrecheck({
+        memberId: memberId!,
+        category: category!,
+        files,
+        sourceType: sourceType || undefined,
+        source: source?.trim() || undefined,
+        tags: normalizeTags(tags),
+        description: description?.trim() || undefined,
+        titles: files.map((file, index) =>
+          buildResolvedTitle(titleMode, file.name, index, titlePrefix),
+        ),
+      });
+    },
+  });
 
   useEffect(() => {
     if (!open) {
@@ -108,23 +169,77 @@ export function AssetImportWizardModal({
     }
 
     form.resetFields();
-    setCurrentStep(0);
+    setCurrentStep(initialStep);
+
+    if (initialDraft) {
+      setFileList(
+        initialDraft.files.map(
+          (file, index) =>
+            ({
+              uid: `${file.name}-${file.lastModified}-${index}`,
+              name: file.name,
+              size: file.size,
+              type: file.type,
+              status: 'done',
+              originFileObj: file as UploadFile['originFileObj'],
+            }) as UploadFile,
+        ),
+      );
+      form.setFieldsValue({
+        memberId: initialDraft.memberId,
+        category: initialDraft.category,
+        sourceType: initialDraft.sourceType,
+        source: initialDraft.source,
+        tags: initialDraft.tags,
+        description: initialDraft.description,
+        titleMode: initialDraft.titleMode,
+        titlePrefix: initialDraft.titlePrefix,
+      });
+      return;
+    }
+
     setFileList([]);
     form.setFieldsValue({
       category: 'PHOTO',
       titleMode: 'ORIGINAL_NAME',
       tags: [],
     });
-  }, [form, open]);
+  }, [form, initialDraft, initialStep, open]);
 
   const previewRows = useMemo(() => {
     return fileList.map((item, index) => ({
       key: item.uid,
+      inputIndex: index,
       originalName: item.name,
       sizeText: `${Math.max(1, Math.round((item.size ?? 0) / 1024))} KB`,
       title: buildResolvedTitle(titleMode, item.name, index, titlePrefix),
     }));
   }, [fileList, titleMode, titlePrefix]);
+
+  useEffect(() => {
+    if (currentStep !== 3 || !memberId || !category || fileList.length === 0) {
+      return;
+    }
+
+    setPrecheckError(null);
+    void precheckMutation
+      .refetch()
+      .catch((error) => {
+        setPrecheckError(error instanceof Error ? error.message : '导入预检查失败');
+      });
+  }, [
+    category,
+    currentStep,
+    description,
+    fileList,
+    memberId,
+    precheckMutation,
+    source,
+    sourceType,
+    tags,
+    titleMode,
+    titlePrefix,
+  ]);
 
   const nextStep = async () => {
     if (currentStep === 0) {
@@ -176,7 +291,10 @@ export function AssetImportWizardModal({
             <Button
               type="primary"
               loading={loading}
-              disabled={currentStep === 1 && fileList.length === 0}
+              disabled={
+                (currentStep === 1 && fileList.length === 0) ||
+                (currentStep === 3 && (precheckMutation.data?.errorCount ?? 0) > 0)
+              }
               onClick={async () => {
                 if (currentStep < 3) {
                   await nextStep();
@@ -401,20 +519,73 @@ export function AssetImportWizardModal({
               <Alert
                 type="success"
                 showIcon
-                message="最后确认导入预览"
-                description="下面是系统将要生成的资料标题预览。确认无误后会执行批量导入，并自动写入统一标签、来源和描述。"
+                message="最后确认导入预览与预检查"
+                description="下面不仅会预览导入后的标题，还会自动检查可能的重复文件、标题撞车和可疑资料风险。"
               />
+
+              {precheckError ? (
+                <Alert type="error" showIcon message="导入预检查失败" description={precheckError} />
+              ) : precheckMutation.data ? (
+                <Alert
+                  type={
+                    precheckMutation.data.errorCount > 0
+                      ? 'error'
+                      : precheckMutation.data.warningCount > 0
+                        ? 'warning'
+                        : 'success'
+                  }
+                  showIcon
+                  message={
+                    precheckMutation.data.errorCount > 0
+                      ? `预检查发现 ${precheckMutation.data.errorCount} 个文件存在错误，${precheckMutation.data.warningCount} 个文件存在风险提示`
+                      : precheckMutation.data.warningCount > 0
+                        ? `预检查发现 ${precheckMutation.data.warningCount} 个文件存在风险提示`
+                      : '预检查未发现明显重复或可疑资料'
+                  }
+                  description={`批次内重复 ${precheckMutation.data.duplicateInBatchCount} 项，现有资料重复 ${precheckMutation.data.duplicateExistingCount} 项，标题撞车 ${precheckMutation.data.titleCollisionCount} 项。${
+                    precheckMutation.data.errorCount > 0
+                      ? '存在错误项时建议先调整后再导入。'
+                      : ''
+                  }`}
+                />
+              ) : (
+                <Alert type="info" showIcon message="正在执行导入预检查…" />
+              )}
 
               <Table
                 rowKey="key"
                 pagination={false}
                 size="small"
                 scroll={{ x: 720 }}
-                dataSource={previewRows}
+                dataSource={previewRows.map((row) => {
+                  const precheck = precheckMutation.data?.items.find(
+                    (item) => item.inputIndex === row.inputIndex,
+                  );
+
+                  return {
+                    ...row,
+                    riskStatus: precheck?.status ?? 'safe',
+                    riskText:
+                      precheck?.issues.length
+                        ? precheck.issues.map((issue) => issue.message).join('；')
+                        : '未发现风险',
+                  };
+                })}
                 columns={[
                   { title: '原文件名', dataIndex: 'originalName' },
                   { title: '导入后标题', dataIndex: 'title' },
                   { title: '大小', dataIndex: 'sizeText', width: 120 },
+                  {
+                    title: '预检查',
+                    render: (_value, record: { riskStatus: string; riskText: string }) =>
+                      record.riskStatus === 'error' ? (
+                        <Text type="danger">{record.riskText}</Text>
+                      ) : record.riskStatus === 'warning' ? (
+                        <Text type="warning">{record.riskText}</Text>
+                      ) : (
+                        <Text type="secondary">{record.riskText}</Text>
+                      ),
+                  },
                 ]}
               />
 

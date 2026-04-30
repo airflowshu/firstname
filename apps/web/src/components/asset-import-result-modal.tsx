@@ -12,6 +12,7 @@ export function AssetImportResultModal({
   onClose,
   onViewBatch,
   onContinueBatch,
+  onRetryFailed,
 }: {
   open: boolean;
   result: AssetImportBatchResult | null;
@@ -21,6 +22,11 @@ export function AssetImportResultModal({
     batchId: string;
     memberName: string;
     createdAssetIds: string[];
+  }) => void;
+  onRetryFailed?: (payload: {
+    batchId: string;
+    memberName: string;
+    failureIndexes: number[];
   }) => void;
 }) {
   return (
@@ -46,6 +52,19 @@ export function AssetImportResultModal({
                   }
                 >
                   查看本批次资料
+                </Button>
+              ) : null}
+              {result.failures.length > 0 && onRetryFailed ? (
+                <Button
+                  onClick={() =>
+                    onRetryFailed({
+                      batchId: result.auditLogId,
+                      memberName: result.memberName,
+                      failureIndexes: result.failures.map((item) => item.inputIndex),
+                    })
+                  }
+                >
+                  重试失败项
                 </Button>
               ) : null}
               {result.createdAssets.length > 0 && onContinueBatch ? (

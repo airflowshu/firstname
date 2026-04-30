@@ -48,47 +48,52 @@ enum AuditAction {
 }
 
 model User {
-  id           String      @id @default(cuid())
-  username     String      @unique
-  passwordHash String
-  role         UserRole    @default(VIEWER)
-  status       UserStatus  @default(ACTIVE)
-  lastLoginAt  DateTime?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  auditLogs    AuditLog[]
+  id                          String              @id @default(cuid())
+  username                    String              @unique
+  passwordHash                String
+  tokenVersion                Int                 @default(0)
+  refreshTokenHash            String?
+  refreshTokenExpiresAt       DateTime?
+  role                        UserRole            @default(VIEWER)
+  status                      UserStatus          @default(ACTIVE)
+  lastLoginAt                 DateTime?
+  createdAt                   DateTime            @default(now())
+  updatedAt                   DateTime            @updatedAt
+  auditLogs                   AuditLog[]
   submittedSupplementRequests SupplementRequest[] @relation("SupplementRequester")
   reviewedSupplementRequests  SupplementRequest[] @relation("SupplementReviewer")
   uploadedMemberAssets        MemberAsset[]
   createdMemberEvents         MemberEvent[]
+
+  @@index([refreshTokenHash])
 }
 
 model Member {
-  id                String        @id @default(cuid())
-  name              String
-  gender            Gender        @default(UNKNOWN)
-  birthDate         DateTime?
-  deathDate         DateTime?
-  lifeStatus        LifeStatus    @default(ALIVE)
-  photoPath         String?
-  generationName    String?
-  birthOrder        Int?
-  nativePlace       String?
-  fatherId          String?
-  motherId          String?
-  notes             String?
-  isDeleted         Boolean       @default(false)
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  father            Member?       @relation("FatherChildren", fields: [fatherId], references: [id], onDelete: SetNull)
-  mother            Member?       @relation("MotherChildren", fields: [motherId], references: [id], onDelete: SetNull)
-  fatherChildren    Member[]      @relation("FatherChildren")
-  motherChildren    Member[]      @relation("MotherChildren")
-  marriagesAsMember Marriage[]    @relation("MarriageMember")
-  marriagesAsSpouse Marriage[]    @relation("MarriageSpouse")
+  id                 String              @id @default(cuid())
+  name               String
+  gender             Gender              @default(UNKNOWN)
+  birthDate          DateTime?
+  deathDate          DateTime?
+  lifeStatus         LifeStatus          @default(ALIVE)
+  photoPath          String?
+  generationName     String?
+  birthOrder         Int?
+  nativePlace        String?
+  fatherId           String?
+  motherId           String?
+  notes              String?
+  isDeleted          Boolean             @default(false)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  father             Member?             @relation("FatherChildren", fields: [fatherId], references: [id], onDelete: SetNull)
+  mother             Member?             @relation("MotherChildren", fields: [motherId], references: [id], onDelete: SetNull)
+  fatherChildren     Member[]            @relation("FatherChildren")
+  motherChildren     Member[]            @relation("MotherChildren")
+  marriagesAsMember  Marriage[]          @relation("MarriageMember")
+  marriagesAsSpouse  Marriage[]          @relation("MarriageSpouse")
   supplementRequests SupplementRequest[]
-  assets            MemberAsset[]
-  events            MemberEvent[]
+  assets             MemberAsset[]
+  events             MemberEvent[]
 
   @@index([name])
   @@index([fatherId])
@@ -132,17 +137,17 @@ enum MemberEventType {
 
 model MemberEvent {
   id          String          @id @default(cuid())
-  memberId     String
-  createdById  String?
-  eventType    MemberEventType
-  title        String
-  description  String?
-  eventDate    DateTime
-  isDeleted    Boolean         @default(false)
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  member       Member          @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  createdBy    User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  memberId    String
+  createdById String?
+  eventType   MemberEventType
+  title       String
+  description String?
+  eventDate   DateTime
+  isDeleted   Boolean         @default(false)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  member      Member          @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  createdBy   User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([memberId])
   @@index([createdById])
@@ -158,29 +163,31 @@ enum MemberAssetCategory {
 
 model MemberAsset {
   id           String              @id @default(cuid())
-  memberId      String
-  uploadedById  String?
-  category      MemberAssetCategory
-  filePath      String
-  originalName  String
-  title         String?
-  sourceType    String?
-  source        String?
-  description   String?
-  tags          String[]            @default([])
-  mimeType      String
-  sizeBytes     Int
-  isDeleted     Boolean             @default(false)
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  member        Member              @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  uploadedBy    User?               @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  memberId     String
+  uploadedById String?
+  category     MemberAssetCategory
+  filePath     String
+  originalName String
+  checksum     String?
+  title        String?
+  sourceType   String?
+  source       String?
+  description  String?
+  tags         String[]            @default([])
+  mimeType     String
+  sizeBytes    Int
+  isDeleted    Boolean             @default(false)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  member       Member              @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  uploadedBy   User?               @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
 
   @@index([memberId])
   @@index([uploadedById])
   @@index([category])
   @@index([isDeleted])
   @@index([createdAt])
+  @@index([checksum])
 }
 
 enum SupplementRequestStatus {
@@ -196,22 +203,22 @@ enum SupplementRequestType {
 }
 
 model SupplementRequest {
-  id            String                  @id @default(cuid())
-  memberId       String
-  requesterId    String
-  reviewerId     String?
-  requestType    SupplementRequestType  @default(BASIC_INFO)
-  status         SupplementRequestStatus @default(PENDING)
-  patch          Json
-  reason         String?
-  reviewComment  String?
-  reviewedAt     DateTime?
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
-  member         Member                 @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  requester      User                   @relation("SupplementRequester", fields: [requesterId], references: [id], onDelete: Cascade)
-  reviewer       User?                  @relation("SupplementReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
-  assets         SupplementRequestAsset[]
+  id            String                   @id @default(cuid())
+  memberId      String
+  requesterId   String
+  reviewerId    String?
+  requestType   SupplementRequestType    @default(BASIC_INFO)
+  status        SupplementRequestStatus  @default(PENDING)
+  patch         Json
+  reason        String?
+  reviewComment String?
+  reviewedAt    DateTime?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+  member        Member                   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  requester     User                     @relation("SupplementRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  reviewer      User?                    @relation("SupplementReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  assets        SupplementRequestAsset[]
 
   @@index([memberId])
   @@index([requesterId])
@@ -223,24 +230,26 @@ model SupplementRequest {
 
 model SupplementRequestAsset {
   id           String              @id @default(cuid())
-  requestId     String
-  category      MemberAssetCategory
-  filePath      String
-  originalName  String
-  title         String?
-  sourceType    String?
-  source        String?
-  description   String?
-  tags          String[]            @default([])
-  mimeType      String
-  sizeBytes     Int
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  request       SupplementRequest  @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  requestId    String
+  category     MemberAssetCategory
+  filePath     String
+  originalName String
+  checksum     String?
+  title        String?
+  sourceType   String?
+  source       String?
+  description  String?
+  tags         String[]            @default([])
+  mimeType     String
+  sizeBytes    Int
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  request      SupplementRequest   @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
   @@index([requestId])
   @@index([category])
   @@index([createdAt])
+  @@index([checksum])
 }
 
 model Marriage {

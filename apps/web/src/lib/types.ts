@@ -238,6 +238,7 @@ export interface AssetSourceRecord {
 export type AssetBatchAction = 'APPEND_TAGS' | 'SET_SOURCE_TYPE' | 'DELETE';
 
 export interface AssetImportFailure {
+  inputIndex: number;
   originalName: string;
   message: string;
 }
@@ -259,6 +260,38 @@ export interface AssetImportBatchView {
   batchId: string;
   memberName: string;
   createdAssetIds: string[];
+}
+
+export interface AssetImportPrecheckIssue {
+  code: string;
+  severity: 'warning' | 'error';
+  message: string;
+  relatedMemberName?: string;
+  relatedAssetId?: string;
+}
+
+export interface AssetImportPrecheckItem {
+  inputIndex: number;
+  originalName: string;
+  resolvedTitle: string;
+  sizeBytes: number;
+  mimeType: string;
+  checksum: string;
+  status: 'safe' | 'warning' | 'error';
+  issues: AssetImportPrecheckIssue[];
+}
+
+export interface AssetImportPrecheckResult {
+  memberId: string;
+  memberName: string;
+  category: MemberAssetCategory;
+  totalCount: number;
+  errorCount: number;
+  warningCount: number;
+  duplicateInBatchCount: number;
+  duplicateExistingCount: number;
+  titleCollisionCount: number;
+  items: AssetImportPrecheckItem[];
 }
 
 export interface AssetImportBatchRecord {

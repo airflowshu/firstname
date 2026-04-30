@@ -15,6 +15,7 @@ import {
   Space,
   Table,
   Tag,
+  Tabs,
   Typography,
 } from 'antd';
 import { useEffect, useState } from 'react';
@@ -33,6 +34,7 @@ export default function SettingsPage() {
   const [editingTag, setEditingTag] = useState<AssetTagRecord | undefined>();
   const [sourceOpen, setSourceOpen] = useState(false);
   const [editingSource, setEditingSource] = useState<AssetSourceRecord | undefined>();
+  const [activeSettingsTab, setActiveSettingsTab] = useState('kinship-alias');
   const [form] = Form.useForm();
   const [tagForm] = Form.useForm();
   const [sourceForm] = Form.useForm();
@@ -182,195 +184,210 @@ export default function SettingsPage() {
           </Space>
         </Card>
 
-        <Card
-          className="soft-panel"
-          title="家族称呼别名映射"
-          extra={
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setEditingAlias(undefined);
-                form.resetFields();
-                setOpen(true);
-              }}
-            >
-              新建映射
-            </Button>
-          }
-        >
-          <Table
-            rowKey="id"
-            loading={aliasesQuery.isLoading}
-            dataSource={aliasesQuery.data ?? []}
-            columns={[
-              { title: '关系编码', dataIndex: 'relationCode' },
-              { title: '标准称呼', dataIndex: 'standardTerm' },
-              { title: '家族叫法', dataIndex: 'familyAlias' },
+        <Card className="soft-panel">
+          <Tabs
+            activeKey={activeSettingsTab}
+            onChange={setActiveSettingsTab}
+            items={[
               {
-                title: '启用状态',
-                dataIndex: 'enabled',
-                render: (value: boolean) => (value ? '启用' : '停用'),
-              },
-              {
-                title: '操作',
-                render: (_: unknown, record: KinshipAlias) => (
-                  <Button
-                    size="small"
-                    onClick={() => {
-                      setEditingAlias(record);
-                      setOpen(true);
-                    }}
-                  >
-                    编辑
-                  </Button>
-                ),
-              },
-            ]}
-          />
-        </Card>
-
-        <Card
-          className="soft-panel"
-          title="资料推荐标签词库"
-          extra={
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setEditingTag(undefined);
-                tagForm.resetFields();
-                setTagOpen(true);
-              }}
-            >
-              新建推荐标签
-            </Button>
-          }
-        >
-          <Table
-            rowKey="id"
-            loading={assetTagsQuery.isLoading}
-            dataSource={assetTagsQuery.data ?? []}
-            columns={[
-              {
-                title: '标签名称',
-                dataIndex: 'name',
-                render: (value: string) => <Tag color="processing">{value}</Tag>,
-              },
-              {
-                title: '使用次数',
-                dataIndex: 'useCount',
-              },
-              {
-                title: '排序',
-                dataIndex: 'sortOrder',
-              },
-              {
-                title: '状态',
-                dataIndex: 'enabled',
-                render: (value: boolean) => (value ? '启用' : '停用'),
-              },
-              {
-                title: '操作',
-                render: (_: unknown, record: AssetTagRecord) => (
-                  <Space wrap>
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        setEditingTag(record);
-                        setTagOpen(true);
-                      }}
-                    >
-                      编辑
-                    </Button>
-                    <Popconfirm
-                      title="确定删除这个推荐标签吗？"
-                      description="如果该标签仍被资料使用，系统会阻止删除。"
-                      onConfirm={() => deleteTagMutation.mutate(record.id)}
-                    >
+                key: 'kinship-alias',
+                label: '家族称呼别名映射',
+                children: (
+                  <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                       <Button
-                        size="small"
-                        danger
-                        icon={<DeleteOutlined />}
-                        loading={deleteTagMutation.isPending}
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => {
+                          setEditingAlias(undefined);
+                          form.resetFields();
+                          setOpen(true);
+                        }}
                       >
-                        删除
+                        新建映射
                       </Button>
-                    </Popconfirm>
+                    </div>
+                    <Table
+                      rowKey="id"
+                      loading={aliasesQuery.isLoading}
+                      dataSource={aliasesQuery.data ?? []}
+                      columns={[
+                        { title: '关系编码', dataIndex: 'relationCode' },
+                        { title: '标准称呼', dataIndex: 'standardTerm' },
+                        { title: '家族叫法', dataIndex: 'familyAlias' },
+                        {
+                          title: '启用状态',
+                          dataIndex: 'enabled',
+                          render: (value: boolean) => (value ? '启用' : '停用'),
+                        },
+                        {
+                          title: '操作',
+                          render: (_: unknown, record: KinshipAlias) => (
+                            <Button
+                              size="small"
+                              onClick={() => {
+                                setEditingAlias(record);
+                                setOpen(true);
+                              }}
+                            >
+                              编辑
+                            </Button>
+                          ),
+                        },
+                      ]}
+                    />
                   </Space>
                 ),
               },
-            ]}
-          />
-        </Card>
-
-        <Card
-          className="soft-panel"
-          title="资料来源类型字典"
-          extra={
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setEditingSource(undefined);
-                sourceForm.resetFields();
-                setSourceOpen(true);
-              }}
-            >
-              新建来源类型
-            </Button>
-          }
-        >
-          <Table
-            rowKey="id"
-            loading={assetSourcesQuery.isLoading}
-            dataSource={assetSourcesQuery.data ?? []}
-            columns={[
               {
-                title: '来源类型',
-                dataIndex: 'name',
-                render: (value: string) => <Tag color="gold">{value}</Tag>,
-              },
-              {
-                title: '使用次数',
-                dataIndex: 'useCount',
-              },
-              {
-                title: '排序',
-                dataIndex: 'sortOrder',
-              },
-              {
-                title: '状态',
-                dataIndex: 'enabled',
-                render: (value: boolean) => (value ? '启用' : '停用'),
-              },
-              {
-                title: '操作',
-                render: (_: unknown, record: AssetSourceRecord) => (
-                  <Space wrap>
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        setEditingSource(record);
-                        setSourceOpen(true);
-                      }}
-                    >
-                      编辑
-                    </Button>
-                    <Popconfirm
-                      title="确定删除这个来源类型吗？"
-                      description="如果该来源仍被资料使用，系统会阻止删除。"
-                      onConfirm={() => deleteSourceMutation.mutate(record.id)}
-                    >
+                key: 'asset-tags',
+                label: '资料推荐标签词库',
+                children: (
+                  <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                       <Button
-                        size="small"
-                        danger
-                        icon={<DeleteOutlined />}
-                        loading={deleteSourceMutation.isPending}
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => {
+                          setEditingTag(undefined);
+                          tagForm.resetFields();
+                          setTagOpen(true);
+                        }}
                       >
-                        删除
+                        新建推荐标签
                       </Button>
-                    </Popconfirm>
+                    </div>
+                    <Table
+                      rowKey="id"
+                      loading={assetTagsQuery.isLoading}
+                      dataSource={assetTagsQuery.data ?? []}
+                      columns={[
+                        {
+                          title: '标签名称',
+                          dataIndex: 'name',
+                          render: (value: string) => <Tag color="processing">{value}</Tag>,
+                        },
+                        {
+                          title: '使用次数',
+                          dataIndex: 'useCount',
+                        },
+                        {
+                          title: '排序',
+                          dataIndex: 'sortOrder',
+                        },
+                        {
+                          title: '状态',
+                          dataIndex: 'enabled',
+                          render: (value: boolean) => (value ? '启用' : '停用'),
+                        },
+                        {
+                          title: '操作',
+                          render: (_: unknown, record: AssetTagRecord) => (
+                            <Space wrap>
+                              <Button
+                                size="small"
+                                onClick={() => {
+                                  setEditingTag(record);
+                                  setTagOpen(true);
+                                }}
+                              >
+                                编辑
+                              </Button>
+                              <Popconfirm
+                                title="确定删除这个推荐标签吗？"
+                                description="如果该标签仍被资料使用，系统会阻止删除。"
+                                onConfirm={() => deleteTagMutation.mutate(record.id)}
+                              >
+                                <Button
+                                  size="small"
+                                  danger
+                                  icon={<DeleteOutlined />}
+                                  loading={deleteTagMutation.isPending}
+                                >
+                                  删除
+                                </Button>
+                              </Popconfirm>
+                            </Space>
+                          ),
+                        },
+                      ]}
+                    />
+                  </Space>
+                ),
+              },
+              {
+                key: 'asset-sources',
+                label: '资料来源类型字典',
+                children: (
+                  <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => {
+                          setEditingSource(undefined);
+                          sourceForm.resetFields();
+                          setSourceOpen(true);
+                        }}
+                      >
+                        新建来源类型
+                      </Button>
+                    </div>
+                    <Table
+                      rowKey="id"
+                      loading={assetSourcesQuery.isLoading}
+                      dataSource={assetSourcesQuery.data ?? []}
+                      columns={[
+                        {
+                          title: '来源类型',
+                          dataIndex: 'name',
+                          render: (value: string) => <Tag color="gold">{value}</Tag>,
+                        },
+                        {
+                          title: '使用次数',
+                          dataIndex: 'useCount',
+                        },
+                        {
+                          title: '排序',
+                          dataIndex: 'sortOrder',
+                        },
+                        {
+                          title: '状态',
+                          dataIndex: 'enabled',
+                          render: (value: boolean) => (value ? '启用' : '停用'),
+                        },
+                        {
+                          title: '操作',
+                          render: (_: unknown, record: AssetSourceRecord) => (
+                            <Space wrap>
+                              <Button
+                                size="small"
+                                onClick={() => {
+                                  setEditingSource(record);
+                                  setSourceOpen(true);
+                                }}
+                              >
+                                编辑
+                              </Button>
+                              <Popconfirm
+                                title="确定删除这个来源类型吗？"
+                                description="如果该来源仍被资料使用，系统会阻止删除。"
+                                onConfirm={() => deleteSourceMutation.mutate(record.id)}
+                              >
+                                <Button
+                                  size="small"
+                                  danger
+                                  icon={<DeleteOutlined />}
+                                  loading={deleteSourceMutation.isPending}
+                                >
+                                  删除
+                                </Button>
+                              </Popconfirm>
+                            </Space>
+                          ),
+                        },
+                      ]}
+                    />
                   </Space>
                 ),
               },

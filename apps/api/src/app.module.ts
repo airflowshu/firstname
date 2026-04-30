@@ -1,7 +1,8 @@
 import { CacheModule } from '@nestjs/cache-manager';
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -24,6 +25,17 @@ import { AppService } from './app.service';
       load: [configuration],
       envFilePath: ['../../.env', '.env'],
     }),
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        throttlers: [
+          {
+            ttl: configService.get<number>('globalThrottleTtlMs', 60_000),
+            limit: configService.get<number>('globalThrottleLimit', 120),
+          },
+        ],
+      }),
+    }),
     CacheModule.register({
       isGlobal: true,
       ttl: 60_000,
@@ -42,6 +54,10 @@ import { AppService } from './app.service';
   controllers: [AppController],
   providers: [
     AppService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

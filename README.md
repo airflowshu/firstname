@@ -41,7 +41,13 @@ pnpm --filter @fisrtname/api prisma migrate deploy
 pnpm db:seed
 ```
 
-### 5. 启动开发环境
+### 5. 配置env
+- 生成`JWT_SECRET `
+```node.js
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+### 6. 启动开发环境
 
 ```bash
 pnpm dev
