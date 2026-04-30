@@ -10,9 +10,7 @@ import {
   FilterOutlined,
   PaperClipOutlined,
   PlusOutlined,
-  PictureOutlined,
   SearchOutlined,
-  UploadOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -22,21 +20,25 @@ import {
   Card,
   Descriptions,
   Divider,
+  Dropdown,
   Image,
   Input,
   List,
   Popconfirm,
   Select,
+  Skeleton,
   Space,
   Table,
   Tag,
+  Tabs,
   Timeline,
   Typography,
 } from 'antd';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { useDeferredValue, useRef, useState } from 'react';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useDeferredValue, useEffect, useRef, useState } from 'react';
 import { AuthGuard } from '@/components/auth-guard';
+import { useViewportMode } from '@/hooks/use-viewport-mode';
 import { MarriageFormModal } from '@/components/marriage-form-modal';
 import { MemberAssetModal } from '@/components/member-asset-modal';
 import { MemberEventModal } from '@/components/member-event-modal';
@@ -68,10 +70,14 @@ type QuickRelativeConfig = {
 export default function MemberDetailPage() {
   const { message } = App.useApp();
   const params = useParams<{ id: string }>();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const memberId = Array.isArray(params.id) ? params.id[0] : params.id;
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { isAdmin } = useAuth();
+  const { isMobile } = useViewportMode();
   const [editOpen, setEditOpen] = useState(false);
   const [marriageOpen, setMarriageOpen] = useState(false);
   const [supplementOpen, setSupplementOpen] = useState(false);
@@ -82,6 +88,7 @@ export default function MemberDetailPage() {
   const [assetTag, setAssetTag] = useState<string | undefined>();
   const [eventOpen, setEventOpen] = useState(false);
   const [quickRelativeConfig, setQuickRelativeConfig] = useState<QuickRelativeConfig | null>(null);
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') ?? 'overview');
   const [editingMarriage, setEditingMarriage] = useState<{
     id: string;
     spouseName: string;
@@ -97,6 +104,26 @@ export default function MemberDetailPage() {
   });
 
   const member = memberQuery.data;
+  const isMemberPending = memberQuery.isLoading && !member;
+
+  useEffect(() => {
+    const nextTab = searchParams.get('tab');
+    if (nextTab && nextTab !== activeTab) {
+      setActiveTab(nextTab);
+    }
+  }, [activeTab, searchParams]);
+
+  const updateTab = (nextTab: string) => {
+    setActiveTab(nextTab);
+    const nextParams = new URLSearchParams(searchParams.toString());
+    if (nextTab === 'overview') {
+      nextParams.delete('tab');
+    } else {
+      nextParams.set('tab', nextTab);
+    }
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
+  };
   const allAssetsQuery = useQuery({
     queryKey: ['member-assets', memberId, 'all'],
     queryFn: () => api.getMemberAssets(memberId),
@@ -114,6 +141,34 @@ export default function MemberDetailPage() {
   const documentAssets = matchedAssets.filter((asset) => asset.category === 'DOCUMENT');
   const totalAssetCount = allAssetsQuery.data?.length ?? 0;
   const matchedAssetCount = matchedAssets.length;
+  const totalPhotoCount = (allAssetsQuery.data ?? []).filter((asset) => asset.category === 'PHOTO').length;
+  const totalDocumentCount = (allAssetsQuery.data ?? []).filter((asset) => asset.category === 'DOCUMENT').length;
+  const parentRelations = member
+    ? [
+        member.father
+          ? {
+              key: 'father',
+              label: '父亲' as const,
+              person: member.father,
+            }
+          : null,
+        member.mother
+          ? {
+              key: 'mother',
+              label: '母亲' as const,
+              person: member.mother,
+            }
+          : null,
+      ].filter(
+        (
+          item,
+        ): item is {
+          key: string;
+          label: '父亲' | '母亲';
+          person: NonNullable<MemberDetail['father']>;
+        } => Boolean(item),
+      )
+    : [];
   const assetTagOptions = Array.from(
     new Set((allAssetsQuery.data ?? []).flatMap((asset) => asset.tags)),
   ).map((tag) => ({
@@ -506,559 +561,689 @@ export default function MemberDetailPage() {
       </Space>
     ) : null;
 
+  const relationActionItems = [
+    { key: 'father', label: '快速新增父亲', onClick: () => openQuickRelativeModal('father') },
+    { key: 'mother', label: '快速新增母亲', onClick: () => openQuickRelativeModal('mother') },
+    { key: 'child', label: '快速新增子女', onClick: () => openQuickRelativeModal('child') },
+    { key: 'sibling', label: '快速新增兄弟姐妹', onClick: () => openQuickRelativeModal('sibling') },
+    { key: 'spouse', label: '快速新增配偶', onClick: () => openQuickRelativeModal('spouse') },
+    {
+      key: 'marriage',
+      label: '绑定现有配偶',
+      onClick: () => {
+        setEditingMarriage(null);
+        setMarriageOpen(true);
+      },
+    },
+  ];
+
+  const adminHeaderActionItems = [
+    {
+      key: 'upload-avatar',
+      label: '上传头像',
+      onClick: () => fileInputRef.current?.click(),
+    },
+    {
+      key: 'upload-photo',
+      label: '上传照片',
+      onClick: () => setAssetModalType('PHOTO'),
+    },
+    {
+      key: 'upload-document',
+      label: '上传附件',
+      onClick: () => setAssetModalType('DOCUMENT'),
+    },
+  ];
+
+  const viewerHeaderActionItems = [
+    {
+      key: 'supplement-photo',
+      label: '提交照片补充',
+      onClick: () => setAssetSupplementType('PHOTO'),
+    },
+    {
+      key: 'supplement-document',
+      label: '提交附件补充',
+      onClick: () => setAssetSupplementType('DOCUMENT'),
+    },
+  ];
+
   return (
     <AuthGuard>
       <div className="page-stack">
         <Card className="soft-panel">
-          <Space align="start" style={{ width: '100%', justifyContent: 'space-between' }}>
-            <Space align="start" size={16}>
-              <Button icon={<ArrowLeftOutlined />}>
-                <Link href="/members">返回成员列表</Link>
-              </Button>
-              <Space align="start" size={16}>
-                {member?.photoUrl ? (
-                  <Image
-                    src={toAbsoluteAssetUrl(member.photoUrl) ?? ''}
-                    alt={member.name}
-                    width={96}
-                    height={96}
-                    style={{ borderRadius: 12, objectFit: 'cover' }}
-                  />
+          <div className="page-hero">
+            <div className="page-hero-copy">
+              <Space align="start" size={16} wrap>
+                <Button icon={<ArrowLeftOutlined />}>
+                  <Link href="/members">返回成员列表</Link>
+                </Button>
+                {isMemberPending ? (
+                  <div className="member-hero-loading">
+                    <Skeleton.Avatar active size={96} shape="square" />
+                    <div className="member-hero-loading-copy">
+                      <div className="page-eyebrow">Member Profile</div>
+                      <Skeleton.Input active size="large" className="member-hero-loading-title" />
+                      <Skeleton.Input active size="small" className="member-hero-loading-desc" />
+                    </div>
+                  </div>
                 ) : (
-                  <Avatar size={96}>{member?.name?.slice(0, 1)}</Avatar>
-                )}
-                <div>
-                  <Title level={3} style={{ marginBottom: 8 }}>
-                    {member?.name}
-                  </Title>
-                  <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                    {member?.gender === 'MALE' ? '男' : member?.gender === 'FEMALE' ? '女' : '未知'}{' '}
-                    · {member?.generationName ? `字辈 ${member.generationName} · ` : ''}
-                    {member?.nativePlace ?? '籍贯待补充'}
-                  </Paragraph>
-                </div>
-              </Space>
-            </Space>
-            {isAdmin ? (
-              <Space>
-                <input
-                  ref={fileInputRef}
-                  hidden
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) {
-                      uploadMutation.mutate(file);
-                    }
-                  }}
-                />
-                <Button
-                  icon={<UploadOutlined />}
-                  loading={uploadMutation.isPending}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  上传头像
-                </Button>
-                <Button type="primary" icon={<EditOutlined />} onClick={() => setEditOpen(true)}>
-                  编辑档案
-                </Button>
-              </Space>
-            ) : member ? (
-              <Button onClick={() => setSupplementOpen(true)}>提交资料补充申请</Button>
-            ) : null}
-          </Space>
-        </Card>
-
-        <Card className="soft-panel" loading={allAssetsQuery.isLoading}>
-          <div className="member-asset-toolbar">
-            <div>
-              <Title level={5} style={{ margin: 0 }}>
-                资料检索
-              </Title>
-              <Paragraph type="secondary" style={{ margin: '4px 0 0' }}>
-                已沉淀 {totalAssetCount} 项资料，当前匹配 {matchedAssetCount} 项，可按标题、来源、描述或标签检索。
-              </Paragraph>
-            </div>
-            <Space wrap className="member-asset-toolbar-actions">
-              <Input
-                allowClear
-                value={assetKeyword}
-                prefix={<SearchOutlined />}
-                placeholder="搜索资料标题、原文件名、来源或描述"
-                style={{ width: 280 }}
-                onChange={(event) => setAssetKeyword(event.target.value)}
-              />
-              <Select
-                allowClear
-                value={assetTag}
-                placeholder="按标签筛选"
-                style={{ width: 220 }}
-                options={assetTagOptions}
-                suffixIcon={<FilterOutlined />}
-                onChange={(value) => setAssetTag(value)}
-              />
-            </Space>
-          </div>
-          {assetTagOptions.length > 0 ? (
-            <Space wrap size={[8, 8]} style={{ marginTop: 12 }}>
-              {assetTagOptions.slice(0, 16).map((option) => (
-                <Tag
-                  key={option.value}
-                  color={assetTag === option.value ? 'processing' : 'default'}
-                  style={{ cursor: 'pointer', marginInlineEnd: 0 }}
-                  onClick={() => setAssetTag(assetTag === option.value ? undefined : option.value)}
-                >
-                  {option.label}
-                </Tag>
-              ))}
-            </Space>
-          ) : null}
-        </Card>
-
-        <Card
-          className="soft-panel"
-          title="家族相册"
-          extra={
-            isAdmin ? (
-              <Space>
-                <Button
-                  icon={<PictureOutlined />}
-                  loading={uploadAssetMutation.isPending}
-                  onClick={() => setAssetModalType('PHOTO')}
-                >
-                  上传照片
-                </Button>
-              </Space>
-            ) : member ? (
-              <Button onClick={() => setAssetSupplementType('PHOTO')}>提交照片补充</Button>
-            ) : null
-          }
-        >
-          {photoAssets.length > 0 ? (
-            <div className="member-photo-grid">
-              {photoAssets.map((asset) => (
-                <div key={asset.id} className="member-photo-card">
-                  <Image
-                    src={toAbsoluteAssetUrl(asset.fileUrl) ?? ''}
-                    alt={asset.originalName}
-                    width={180}
-                    height={180}
-                    style={{ objectFit: 'cover', borderRadius: 12 }}
-                  />
-                  <div className="member-asset-body">
-                    <Text strong ellipsis>
-                      {asset.title || asset.originalName}
-                    </Text>
-                    {asset.title ? (
-                      <Text type="secondary" className="member-asset-subtitle">
-                        原文件：{asset.originalName}
-                      </Text>
-                    ) : null}
-                    {asset.source ? (
-                      <Text type="secondary" className="member-asset-subtitle">
-                        来源：
-                        {[asset.sourceType, asset.source].filter(Boolean).join(' · ')}
-                      </Text>
-                    ) : asset.sourceType ? (
-                      <Text type="secondary" className="member-asset-subtitle">
-                        来源：{asset.sourceType}
-                      </Text>
-                    ) : null}
-                    {asset.description ? (
-                      <Paragraph className="member-asset-description">
-                        {asset.description}
-                      </Paragraph>
-                    ) : null}
-                    {renderAssetTags(asset)}
-                    <Text type="secondary" className="member-asset-subtitle">
-                      上传于 {formatDate(asset.createdAt, 'YYYY-MM-DD HH:mm')}
-                    </Text>
-                  </div>
-                  <div className="member-asset-footer">
-                    <Text type="secondary">
-                      {Math.max(1, Math.round(asset.sizeBytes / 1024))} KB
-                    </Text>
-                    <Space size={8}>
-                      {isAdmin ? (
-                        <Button
-                          size="small"
-                          icon={<EditOutlined />}
-                          onClick={() => setEditingAsset(asset)}
-                        >
-                          编辑
-                        </Button>
-                      ) : null}
-                      {isAdmin ? (
-                        <Popconfirm
-                          title="确定删除这张照片吗？"
-                          onConfirm={() => deleteAssetMutation.mutate(asset)}
-                        >
-                          <Button size="small" icon={<DeleteOutlined />} danger />
-                        </Popconfirm>
-                      ) : null}
-                    </Space>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Text type="secondary">
-              {deferredAssetKeyword || assetTag ? '当前筛选下暂无成员照片。' : '暂无成员照片。'}
-            </Text>
-          )}
-        </Card>
-
-        <Card
-          className="soft-panel"
-          title="资料附件"
-          extra={
-            isAdmin ? (
-              <Space>
-                <Button
-                  icon={<PaperClipOutlined />}
-                  loading={uploadAssetMutation.isPending}
-                  onClick={() => setAssetModalType('DOCUMENT')}
-                >
-                  上传附件
-                </Button>
-              </Space>
-            ) : member ? (
-              <Button onClick={() => setAssetSupplementType('DOCUMENT')}>提交附件补充</Button>
-            ) : null
-          }
-        >
-          <List
-            dataSource={documentAssets}
-            loading={filteredAssetsQuery.isLoading || filteredAssetsQuery.isFetching}
-            locale={{
-              emptyText:
-                deferredAssetKeyword || assetTag ? '当前筛选下暂无资料附件。' : '暂无资料附件。',
-            }}
-            renderItem={(asset) => (
-              <List.Item
-                actions={
-                  isAdmin
-                    ? [
-                        <Button
-                          key="edit"
-                          size="small"
-                          icon={<EditOutlined />}
-                          onClick={() => setEditingAsset(asset)}
-                        >
-                          编辑
-                        </Button>,
-                        <Popconfirm
-                          key="delete"
-                          title="确定删除这个附件吗？"
-                          onConfirm={() => deleteAssetMutation.mutate(asset)}
-                        >
-                          <Button size="small" icon={<DeleteOutlined />} danger />
-                        </Popconfirm>,
-                      ]
-                    : undefined
-                }
-              >
-                <List.Item.Meta
-                  avatar={
-                    asset.mimeType === 'application/pdf' ? (
-                      <FileTextOutlined style={{ fontSize: 20, color: '#b42318' }} />
-                    ) : asset.mimeType.includes('zip') ? (
-                      <FileZipOutlined style={{ fontSize: 20, color: '#7c3aed' }} />
+                  <Space align="start" size={16}>
+                    {member?.photoUrl ? (
+                      <Image
+                        src={toAbsoluteAssetUrl(member.photoUrl) ?? ''}
+                        alt={member.name}
+                        width={96}
+                        height={96}
+                        style={{ borderRadius: 12, objectFit: 'cover' }}
+                      />
                     ) : (
-                      <PaperClipOutlined style={{ fontSize: 20, color: '#8a704f' }} />
-                    )
-                  }
-                  title={
-                    <a
-                      href={toAbsoluteAssetUrl(asset.fileUrl) ?? '#'}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {asset.title || asset.originalName}
-                    </a>
-                  }
-                  description={
-                    <div className="member-asset-list-desc">
-                      {asset.title ? (
-                        <Text type="secondary" className="member-asset-subtitle">
-                          原文件：{asset.originalName}
-                        </Text>
+                      <Avatar size={96}>{member?.name?.slice(0, 1)}</Avatar>
+                    )}
+                    <div>
+                      <div className="page-eyebrow">Member Profile</div>
+                      <Title level={3} className="page-hero-title">
+                        {member?.name ?? '成员详情'}
+                      </Title>
+                      <Paragraph className="page-hero-desc">
+                        {member?.gender === 'MALE' ? '男' : member?.gender === 'FEMALE' ? '女' : '未知'} ·{' '}
+                        {member?.generationName ? `字辈 ${member.generationName} · ` : ''}
+                        {member?.nativePlace ?? '籍贯待补充'}
+                      </Paragraph>
+                      {member ? (
+                        <div className="member-overview-pills">
+                          <button
+                            type="button"
+                            className="member-overview-pill"
+                            onClick={() => updateTab('relations')}
+                          >
+                            子女 {member.children.length}
+                          </button>
+                          <button
+                            type="button"
+                            className="member-overview-pill"
+                            onClick={() => updateTab('relations')}
+                          >
+                            兄弟姐妹 {member.siblings.length}
+                          </button>
+                          <button
+                            type="button"
+                            className="member-overview-pill"
+                            onClick={() => updateTab('relations')}
+                          >
+                            婚姻 {member.marriages.length}
+                          </button>
+                          <button
+                            type="button"
+                            className="member-overview-pill"
+                            onClick={() => updateTab('assets')}
+                          >
+                            资料 {totalAssetCount}
+                          </button>
+                          <button
+                            type="button"
+                            className="member-overview-pill"
+                            onClick={() => updateTab('assets')}
+                          >
+                            照片 {totalPhotoCount}
+                          </button>
+                          <button
+                            type="button"
+                            className="member-overview-pill"
+                            onClick={() => updateTab('assets')}
+                          >
+                            附件 {totalDocumentCount}
+                          </button>
+                        </div>
                       ) : null}
-                      {asset.source ? (
-                        <Text type="secondary" className="member-asset-subtitle">
-                          来源：
-                          {[asset.sourceType, asset.source].filter(Boolean).join(' · ')}
-                        </Text>
-                      ) : asset.sourceType ? (
-                        <Text type="secondary" className="member-asset-subtitle">
-                          来源：{asset.sourceType}
-                        </Text>
-                      ) : null}
-                      {asset.description ? (
-                        <Paragraph className="member-asset-description">
-                          {asset.description}
+                    </div>
+                  </Space>
+                )}
+              </Space>
+            </div>
+            <div className="page-hero-actions">
+              <input
+                ref={fileInputRef}
+                hidden
+                type="file"
+                accept="image/*"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) {
+                    uploadMutation.mutate(file);
+                  }
+                }}
+              />
+              {isAdmin ? (
+                <>
+                  <Dropdown menu={{ items: adminHeaderActionItems }}>
+                    <Button loading={uploadMutation.isPending} disabled={isMemberPending}>
+                      更多操作
+                    </Button>
+                  </Dropdown>
+                  <Button
+                    type="primary"
+                    icon={<EditOutlined />}
+                    disabled={isMemberPending}
+                    onClick={() => setEditOpen(true)}
+                  >
+                    {isMobile ? '编辑' : '编辑档案'}
+                  </Button>
+                </>
+              ) : member ? (
+                <>
+                  <Dropdown menu={{ items: viewerHeaderActionItems }}>
+                    <Button>更多操作</Button>
+                  </Dropdown>
+                  <Button type="primary" onClick={() => setSupplementOpen(true)}>
+                    提交资料补充申请
+                  </Button>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </Card>
+        <Tabs
+          activeKey={activeTab}
+          onChange={updateTab}
+          className="member-detail-tabs"
+          items={[
+            {
+              key: 'overview',
+              label: '概览',
+              children: (
+                <div className="section-stack">
+                  <Card loading={memberQuery.isLoading} className="soft-panel" title="基础信息">
+                    {isMemberPending ? (
+                      <Skeleton active paragraph={{ rows: 4 }} />
+                    ) : member ? (
+                      <Descriptions column={{ xs: 1, md: 2, xl: 3 }}>
+                        <Descriptions.Item label="出生日期">
+                          {formatDate(member.birthDate)}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="去世日期">
+                          {formatDate(member.deathDate)}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="生命状态">
+                          {member.lifeStatus === 'ALIVE'
+                            ? '在世'
+                            : member.lifeStatus === 'DECEASED'
+                              ? '已故'
+                              : '未知'}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="父亲">{member.father?.name ?? '-'}</Descriptions.Item>
+                        <Descriptions.Item label="母亲">{member.mother?.name ?? '-'}</Descriptions.Item>
+                        <Descriptions.Item label="排行">{member.birthOrder ?? '-'}</Descriptions.Item>
+                        <Descriptions.Item label="籍贯">{member.nativePlace ?? '-'}</Descriptions.Item>
+                        <Descriptions.Item label="创建时间">
+                          {formatDate(member.createdAt, 'YYYY-MM-DD HH:mm')}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="更新时间">
+                          {formatDate(member.updatedAt, 'YYYY-MM-DD HH:mm')}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="备注" span={3}>
+                          {member.notes ?? '暂无备注'}
+                        </Descriptions.Item>
+                      </Descriptions>
+                    ) : null}
+                  </Card>
+                </div>
+              ),
+            },
+            {
+              key: 'relations',
+              label: '关系',
+              children: (
+                <div className="section-stack">
+                  <Card className="soft-panel">
+                    <div className="page-hero">
+                      <div className="page-hero-copy">
+                        <Title level={5} className="page-hero-title">
+                          家庭关系维护
+                        </Title>
+                        <Paragraph className="page-hero-desc">
+                          把父母、子女、兄弟姐妹和婚姻关系集中维护；快速新增与现有配偶绑定统一从“添加关系”进入。
                         </Paragraph>
+                      </div>
+                      {isAdmin ? (
+                        <div className="page-hero-actions">
+                          <Dropdown menu={{ items: relationActionItems }}>
+                            <Button type="primary" icon={<PlusOutlined />}>
+                              添加关系
+                            </Button>
+                          </Dropdown>
+                        </div>
                       ) : null}
-                      {renderAssetTags(asset)}
-                      <Text type="secondary" className="member-asset-subtitle">
-                        {Math.max(1, Math.round(asset.sizeBytes / 1024))} KB · 上传于{' '}
-                        {formatDate(asset.createdAt, 'YYYY-MM-DD HH:mm')}
-                      </Text>
                     </div>
-                  }
-                />
-              </List.Item>
-            )}
-          />
-        </Card>
+                  </Card>
 
-        <Card
-          loading={memberQuery.isLoading}
-          className="soft-panel"
-          title="基础信息"
-          extra={
-            isAdmin && member ? (
-              <Space wrap>
-                {!member.father ? (
-                  <Button size="small" onClick={() => openQuickRelativeModal('father')}>
-                    快速新增父亲
-                  </Button>
-                ) : null}
-                {!member.mother ? (
-                  <Button size="small" onClick={() => openQuickRelativeModal('mother')}>
-                    快速新增母亲
-                  </Button>
-                ) : null}
-              </Space>
-            ) : null
-          }
-        >
-          {member ? (
-            <Descriptions column={{ xs: 1, md: 2, xl: 3 }}>
-              <Descriptions.Item label="出生日期">{formatDate(member.birthDate)}</Descriptions.Item>
-              <Descriptions.Item label="去世日期">{formatDate(member.deathDate)}</Descriptions.Item>
-              <Descriptions.Item label="生命状态">
-                {member.lifeStatus === 'ALIVE'
-                  ? '在世'
-                  : member.lifeStatus === 'DECEASED'
-                    ? '已故'
-                    : '未知'}
-              </Descriptions.Item>
-              <Descriptions.Item label="父亲">{member.father?.name ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="母亲">{member.mother?.name ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="排行">{member.birthOrder ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="籍贯">{member.nativePlace ?? '-'}</Descriptions.Item>
-              <Descriptions.Item label="创建时间">
-                {formatDate(member.createdAt, 'YYYY-MM-DD HH:mm')}
-              </Descriptions.Item>
-              <Descriptions.Item label="更新时间">
-                {formatDate(member.updatedAt, 'YYYY-MM-DD HH:mm')}
-              </Descriptions.Item>
-              <Descriptions.Item label="备注" span={3}>
-                {member.notes ?? '暂无备注'}
-              </Descriptions.Item>
-            </Descriptions>
-          ) : null}
-        </Card>
+                  <Card className="soft-panel" title="直系与同辈关系">
+                    <Space direction="vertical" size={20} style={{ width: '100%' }}>
+                      <div>
+                        <Text strong>父母</Text>
+                        {parentRelations.length > 0 ? (
+                          <div className="member-parent-grid" style={{ marginTop: 12 }}>
+                            {parentRelations.map((item) => (
+                              <div key={item.key} className="member-parent-card">
+                                <Tag color={item.label === '父亲' ? 'blue' : 'magenta'}>
+                                  {item.label}
+                                </Tag>
+                                <Link href={`/members/${item.person.id}`}>{item.person.name}</Link>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{ marginTop: 12 }}>
+                            <Text type="secondary">暂无父母关系数据</Text>
+                          </div>
+                        )}
+                      </div>
+                      <Divider style={{ margin: 0 }} />
+                      <div>
+                        <Text strong>子女</Text>
+                        <List
+                          style={{ marginTop: 12 }}
+                          dataSource={member?.children ?? []}
+                          locale={{ emptyText: '暂无子女成员' }}
+                          renderItem={(item) => (
+                            <List.Item>
+                              <Space>
+                                <Link href={`/members/${item.id}`}>{item.name}</Link>
+                                <Tag>
+                                  {item.gender === 'MALE'
+                                    ? '男'
+                                    : item.gender === 'FEMALE'
+                                      ? '女'
+                                      : '未知'}
+                                </Tag>
+                                <Text type="secondary">{formatDate(item.birthDate)}</Text>
+                              </Space>
+                            </List.Item>
+                          )}
+                        />
+                      </div>
+                      <Divider style={{ margin: 0 }} />
+                      <div>
+                        <Text strong>兄弟姐妹</Text>
+                        <List
+                          style={{ marginTop: 12 }}
+                          dataSource={member?.siblings ?? []}
+                          locale={{ emptyText: '暂无兄弟姐妹成员' }}
+                          renderItem={(item) => (
+                            <List.Item>
+                              <Space>
+                                <Link href={`/members/${item.id}`}>{item.name}</Link>
+                                <Tag>
+                                  {item.gender === 'MALE'
+                                    ? '男'
+                                    : item.gender === 'FEMALE'
+                                      ? '女'
+                                      : '未知'}
+                                </Tag>
+                                <Text type="secondary">
+                                  {item.birthOrder
+                                    ? `排行 ${item.birthOrder}`
+                                    : formatDate(item.birthDate)}
+                                </Text>
+                              </Space>
+                            </List.Item>
+                          )}
+                        />
+                      </div>
+                    </Space>
+                  </Card>
 
-        <Card
-          className="soft-panel"
-          title="成员时间线"
-          extra={
-            isAdmin ? (
-              <Button icon={<CalendarOutlined />} onClick={() => setEventOpen(true)}>
-                新增事件
-              </Button>
-            ) : null
-          }
-        >
-          {member?.timeline && member.timeline.length > 0 ? (
-            <Timeline
-              items={member.timeline.map((event) => ({
-                color:
-                  event.source === 'system'
-                    ? '#8a704f'
-                    : event.eventType === 'HONOR'
-                      ? '#b45309'
-                      : event.eventType === 'MOVE'
-                        ? '#2563eb'
-                        : '#7b1f1f',
-                children: (
-                  <div className="member-event-item">
-                    <div className="member-event-header">
-                      <Space wrap>
-                        <Text strong>{event.title}</Text>
-                        <Tag color={event.source === 'system' ? 'default' : 'processing'}>
-                          {event.source === 'system' ? '系统事件' : '自定义事件'}
-                        </Tag>
-                        <Tag>{event.eventType}</Tag>
+                  <Card className="soft-panel" title="婚姻关系">
+                    <Table
+                      rowKey="id"
+                      pagination={false}
+                      dataSource={member?.marriages ?? []}
+                      columns={[
+                        {
+                          title: '配偶',
+                          dataIndex: ['spouse', 'name'],
+                          render: (_: string, record) => (
+                            <Link href={`/members/${record.spouse.id}`}>{record.spouse.name}</Link>
+                          ),
+                        },
+                        {
+                          title: '状态',
+                          dataIndex: 'status',
+                          render: (value: string) =>
+                            value === 'ACTIVE' ? '婚姻存续' : value === 'DIVORCED' ? '离异' : '丧偶',
+                        },
+                        {
+                          title: '开始日期',
+                          dataIndex: 'startDate',
+                          render: (value: string | null) => formatDate(value),
+                        },
+                        {
+                          title: '结束日期',
+                          dataIndex: 'endDate',
+                          render: (value: string | null) => formatDate(value),
+                        },
+                        {
+                          title: '操作',
+                          render: (_: unknown, record) =>
+                            isAdmin ? (
+                              <Space>
+                                <Button
+                                  size="small"
+                                  onClick={() => {
+                                    setEditingMarriage({
+                                      id: record.id,
+                                      spouseName: record.spouse.name,
+                                      status: record.status,
+                                      startDate: record.startDate,
+                                      endDate: record.endDate,
+                                    });
+                                    setMarriageOpen(true);
+                                  }}
+                                >
+                                  编辑
+                                </Button>
+                                <Popconfirm
+                                  title="确定删除这条婚姻关系吗？"
+                                  onConfirm={() => removeMarriageMutation.mutate(record.id)}
+                                >
+                                  <Button size="small" danger>
+                                    删除
+                                  </Button>
+                                </Popconfirm>
+                              </Space>
+                            ) : (
+                              '-'
+                            ),
+                        },
+                      ]}
+                    />
+                  </Card>
+                </div>
+              ),
+            },
+            {
+              key: 'assets',
+              label: '资料',
+              children: (
+                <div className="section-stack">
+                  <Card className="soft-panel" loading={allAssetsQuery.isLoading}>
+                    <div className="member-asset-toolbar">
+                      <div>
+                        <Title level={5} style={{ margin: 0 }}>
+                          资料检索
+                        </Title>
+                        <Paragraph type="secondary" style={{ margin: '4px 0 0' }}>
+                          已沉淀 {totalAssetCount} 项资料，当前匹配 {matchedAssetCount} 项，可按标题、来源、描述或标签检索。
+                        </Paragraph>
+                      </div>
+                      <Space wrap className="member-asset-toolbar-actions">
+                        <Input
+                          allowClear
+                          value={assetKeyword}
+                          prefix={<SearchOutlined />}
+                          placeholder="搜索资料标题、原文件名、来源或描述"
+                          style={{ width: isMobile ? '100%' : 280 }}
+                          onChange={(event) => setAssetKeyword(event.target.value)}
+                        />
+                        <Select
+                          allowClear
+                          value={assetTag}
+                          placeholder="按标签筛选"
+                          style={{ width: isMobile ? '100%' : 220 }}
+                          options={assetTagOptions}
+                          suffixIcon={<FilterOutlined />}
+                          onChange={(value) => setAssetTag(value)}
+                        />
                       </Space>
-                      <Text type="secondary">{formatDate(event.eventDate)}</Text>
                     </div>
-                    {event.description ? (
-                      <Paragraph className="member-event-desc">{event.description}</Paragraph>
+                    {assetTagOptions.length > 0 ? (
+                      <Space wrap size={[8, 8]} style={{ marginTop: 12 }}>
+                        {assetTagOptions.slice(0, 16).map((option) => (
+                          <Tag
+                            key={option.value}
+                            color={assetTag === option.value ? 'processing' : 'default'}
+                            style={{ cursor: 'pointer', marginInlineEnd: 0 }}
+                            onClick={() =>
+                              setAssetTag(assetTag === option.value ? undefined : option.value)
+                            }
+                          >
+                            {option.label}
+                          </Tag>
+                        ))}
+                      </Space>
                     ) : null}
-                    {event.source === 'custom' && isAdmin ? (
-                      <Popconfirm
-                        title="确定删除这条自定义事件吗？"
-                        onConfirm={() => deleteEventMutation.mutate(event.id)}
-                      >
-                        <Button size="small" danger icon={<DeleteOutlined />}>
-                          删除事件
-                        </Button>
-                      </Popconfirm>
-                    ) : null}
-                  </div>
-                ),
-              }))}
-            />
-          ) : (
-            <Text type="secondary">暂无成员时间线事件。</Text>
-          )}
-        </Card>
+                  </Card>
 
-        <Card
-          className="soft-panel"
-          title="直系与同辈关系"
-          extra={
-            isAdmin ? (
-              <Space wrap>
-                <Button size="small" onClick={() => openQuickRelativeModal('child')}>
-                  快速新增子女
-                </Button>
-                <Button size="small" onClick={() => openQuickRelativeModal('sibling')}>
-                  快速新增兄弟姐妹
-                </Button>
-              </Space>
-            ) : null
-          }
-        >
-          <Space direction="vertical" size={20} style={{ width: '100%' }}>
-            <div>
-              <Text strong>子女</Text>
-              <List
-                style={{ marginTop: 12 }}
-                dataSource={member?.children ?? []}
-                locale={{ emptyText: '暂无子女成员' }}
-                renderItem={(item) => (
-                  <List.Item>
-                    <Space>
-                      <Link href={`/members/${item.id}`}>{item.name}</Link>
-                      <Tag>
-                        {item.gender === 'MALE' ? '男' : item.gender === 'FEMALE' ? '女' : '未知'}
-                      </Tag>
-                      <Text type="secondary">{formatDate(item.birthDate)}</Text>
-                    </Space>
-                  </List.Item>
-                )}
-              />
-            </div>
-            <Divider style={{ margin: 0 }} />
-            <div>
-              <Text strong>兄弟姐妹</Text>
-              <List
-                style={{ marginTop: 12 }}
-                dataSource={member?.siblings ?? []}
-                locale={{ emptyText: '暂无兄弟姐妹成员' }}
-                renderItem={(item) => (
-                  <List.Item>
-                    <Space>
-                      <Link href={`/members/${item.id}`}>{item.name}</Link>
-                      <Tag>
-                        {item.gender === 'MALE' ? '男' : item.gender === 'FEMALE' ? '女' : '未知'}
-                      </Tag>
+                  <Card className="soft-panel" title="家族相册">
+                    {photoAssets.length > 0 ? (
+                      <div className="member-photo-grid">
+                        {photoAssets.map((asset) => (
+                          <div key={asset.id} className="member-photo-card">
+                            <Image
+                              src={toAbsoluteAssetUrl(asset.fileUrl) ?? ''}
+                              alt={asset.originalName}
+                              width={180}
+                              height={180}
+                              style={{ objectFit: 'cover', borderRadius: 12 }}
+                            />
+                            <div className="member-asset-body">
+                              <Text strong ellipsis>
+                                {asset.title || asset.originalName}
+                              </Text>
+                              {asset.title ? (
+                                <Text type="secondary" className="member-asset-subtitle">
+                                  原文件：{asset.originalName}
+                                </Text>
+                              ) : null}
+                              {asset.source ? (
+                                <Text type="secondary" className="member-asset-subtitle">
+                                  来源：
+                                  {[asset.sourceType, asset.source].filter(Boolean).join(' · ')}
+                                </Text>
+                              ) : asset.sourceType ? (
+                                <Text type="secondary" className="member-asset-subtitle">
+                                  来源：{asset.sourceType}
+                                </Text>
+                              ) : null}
+                              {asset.description ? (
+                                <Paragraph className="member-asset-description">
+                                  {asset.description}
+                                </Paragraph>
+                              ) : null}
+                              {renderAssetTags(asset)}
+                              <Text type="secondary" className="member-asset-subtitle">
+                                上传于 {formatDate(asset.createdAt, 'YYYY-MM-DD HH:mm')}
+                              </Text>
+                            </div>
+                            <div className="member-asset-footer">
+                              <Text type="secondary">
+                                {Math.max(1, Math.round(asset.sizeBytes / 1024))} KB
+                              </Text>
+                              <Space size={8}>
+                                {isAdmin ? (
+                                  <Button
+                                    size="small"
+                                    icon={<EditOutlined />}
+                                    onClick={() => setEditingAsset(asset)}
+                                  >
+                                    编辑
+                                  </Button>
+                                ) : null}
+                                {isAdmin ? (
+                                  <Popconfirm
+                                    title="确定删除这张照片吗？"
+                                    onConfirm={() => deleteAssetMutation.mutate(asset)}
+                                  >
+                                    <Button size="small" icon={<DeleteOutlined />} danger />
+                                  </Popconfirm>
+                                ) : null}
+                              </Space>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
                       <Text type="secondary">
-                        {item.birthOrder ? `排行 ${item.birthOrder}` : formatDate(item.birthDate)}
+                        {deferredAssetKeyword || assetTag ? '当前筛选下暂无成员照片。' : '暂无成员照片。'}
                       </Text>
-                    </Space>
-                  </List.Item>
-                )}
-              />
-            </div>
-          </Space>
-        </Card>
+                    )}
+                  </Card>
 
-        <Card
-          className="soft-panel"
-          title="婚姻关系"
-          extra={
-            isAdmin ? (
-              <Space wrap>
-                <Button size="small" onClick={() => openQuickRelativeModal('spouse')}>
-                  快速新增配偶
-                </Button>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setMarriageOpen(true)}>
-                  绑定现有配偶
-                </Button>
-              </Space>
-            ) : null
-          }
-        >
-          <Table
-            rowKey="id"
-            pagination={false}
-            dataSource={member?.marriages ?? []}
-            columns={[
-              {
-                title: '配偶',
-                dataIndex: ['spouse', 'name'],
-                render: (_: string, record) => (
-                  <Link href={`/members/${record.spouse.id}`}>{record.spouse.name}</Link>
-                ),
-              },
-              {
-                title: '状态',
-                dataIndex: 'status',
-                render: (value: string) =>
-                  value === 'ACTIVE' ? '婚姻存续' : value === 'DIVORCED' ? '离异' : '丧偶',
-              },
-              {
-                title: '开始日期',
-                dataIndex: 'startDate',
-                render: (value: string | null) => formatDate(value),
-              },
-              {
-                title: '结束日期',
-                dataIndex: 'endDate',
-                render: (value: string | null) => formatDate(value),
-              },
-              {
-                title: '操作',
-                render: (_: unknown, record) =>
-                  isAdmin ? (
-                    <Space>
-                      <Button
-                        size="small"
-                        onClick={() => {
-                          setEditingMarriage({
-                            id: record.id,
-                            spouseName: record.spouse.name,
-                            status: record.status,
-                            startDate: record.startDate,
-                            endDate: record.endDate,
-                          });
-                          setMarriageOpen(true);
-                        }}
-                      >
-                        编辑
-                      </Button>
-                      <Popconfirm
-                        title="确定删除这条婚姻关系吗？"
-                        onConfirm={() => removeMarriageMutation.mutate(record.id)}
-                      >
-                        <Button size="small" danger>
-                          删除
+                  <Card className="soft-panel" title="资料附件">
+                    <List
+                      dataSource={documentAssets}
+                      loading={filteredAssetsQuery.isLoading || filteredAssetsQuery.isFetching}
+                      locale={{
+                        emptyText:
+                          deferredAssetKeyword || assetTag ? '当前筛选下暂无资料附件。' : '暂无资料附件。',
+                      }}
+                      renderItem={(asset) => (
+                        <List.Item
+                          actions={
+                            isAdmin
+                              ? [
+                                  <Button
+                                    key="edit"
+                                    size="small"
+                                    icon={<EditOutlined />}
+                                    onClick={() => setEditingAsset(asset)}
+                                  >
+                                    编辑
+                                  </Button>,
+                                  <Popconfirm
+                                    key="delete"
+                                    title="确定删除这个附件吗？"
+                                    onConfirm={() => deleteAssetMutation.mutate(asset)}
+                                  >
+                                    <Button size="small" icon={<DeleteOutlined />} danger />
+                                  </Popconfirm>,
+                                ]
+                              : undefined
+                          }
+                        >
+                          <List.Item.Meta
+                            avatar={
+                              asset.mimeType === 'application/pdf' ? (
+                                <FileTextOutlined style={{ fontSize: 20, color: '#b42318' }} />
+                              ) : asset.mimeType.includes('zip') ? (
+                                <FileZipOutlined style={{ fontSize: 20, color: '#7c3aed' }} />
+                              ) : (
+                                <PaperClipOutlined style={{ fontSize: 20, color: '#8a704f' }} />
+                              )
+                            }
+                            title={
+                              <a
+                                href={toAbsoluteAssetUrl(asset.fileUrl) ?? '#'}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {asset.title || asset.originalName}
+                              </a>
+                            }
+                            description={
+                              <div className="member-asset-list-desc">
+                                {asset.title ? (
+                                  <Text type="secondary" className="member-asset-subtitle">
+                                    原文件：{asset.originalName}
+                                  </Text>
+                                ) : null}
+                                {asset.source ? (
+                                  <Text type="secondary" className="member-asset-subtitle">
+                                    来源：
+                                    {[asset.sourceType, asset.source]
+                                      .filter(Boolean)
+                                      .join(' · ')}
+                                  </Text>
+                                ) : asset.sourceType ? (
+                                  <Text type="secondary" className="member-asset-subtitle">
+                                    来源：{asset.sourceType}
+                                  </Text>
+                                ) : null}
+                                {asset.description ? (
+                                  <Paragraph className="member-asset-description">
+                                    {asset.description}
+                                  </Paragraph>
+                                ) : null}
+                                {renderAssetTags(asset)}
+                                <Text type="secondary" className="member-asset-subtitle">
+                                  {Math.max(1, Math.round(asset.sizeBytes / 1024))} KB · 上传于{' '}
+                                  {formatDate(asset.createdAt, 'YYYY-MM-DD HH:mm')}
+                                </Text>
+                              </div>
+                            }
+                          />
+                        </List.Item>
+                      )}
+                    />
+                  </Card>
+                </div>
+              ),
+            },
+            {
+              key: 'timeline',
+              label: '时间线',
+              children: (
+                <div className="section-stack">
+                  <Card
+                    className="soft-panel"
+                    title="成员时间线"
+                    extra={
+                      isAdmin ? (
+                        <Button icon={<CalendarOutlined />} onClick={() => setEventOpen(true)}>
+                          新增事件
                         </Button>
-                      </Popconfirm>
-                    </Space>
-                  ) : (
-                    '-'
-                  ),
-              },
-            ]}
-          />
-        </Card>
+                      ) : null
+                    }
+                  >
+                    {member?.timeline && member.timeline.length > 0 ? (
+                      <Timeline
+                        items={member.timeline.map((event) => ({
+                          color:
+                            event.source === 'system'
+                              ? '#8a704f'
+                              : event.eventType === 'HONOR'
+                                ? '#b45309'
+                                : event.eventType === 'MOVE'
+                                  ? '#2563eb'
+                                  : '#7b1f1f',
+                          children: (
+                            <div className="member-event-item">
+                              <div className="member-event-header">
+                                <Space wrap>
+                                  <Text strong>{event.title}</Text>
+                                  <Tag color={event.source === 'system' ? 'default' : 'processing'}>
+                                    {event.source === 'system' ? '系统事件' : '自定义事件'}
+                                  </Tag>
+                                  <Tag>{event.eventType}</Tag>
+                                </Space>
+                                <Text type="secondary">{formatDate(event.eventDate)}</Text>
+                              </div>
+                              {event.description ? (
+                                <Paragraph className="member-event-desc">{event.description}</Paragraph>
+                              ) : null}
+                              {event.source === 'custom' && isAdmin ? (
+                                <Popconfirm
+                                  title="确定删除这条自定义事件吗？"
+                                  onConfirm={() => deleteEventMutation.mutate(event.id)}
+                                >
+                                  <Button size="small" danger icon={<DeleteOutlined />}>
+                                    删除事件
+                                  </Button>
+                                </Popconfirm>
+                              ) : null}
+                            </div>
+                          ),
+                        }))}
+                      />
+                    ) : (
+                      <Text type="secondary">暂无成员时间线事件。</Text>
+                    )}
+                  </Card>
+                </div>
+              ),
+            },
+          ]}
+        />
 
         <MemberFormModal
           open={editOpen}

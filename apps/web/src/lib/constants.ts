@@ -11,9 +11,6 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 
-export const TOKEN_STORAGE_KEY = 'fisrtname-token';
-export const USER_STORAGE_KEY = 'fisrtname-user';
-
 export const appMenus = [
   { key: '/dashboard', icon: DashboardOutlined, label: '首页统计' },
   { key: '/members', icon: TeamOutlined, label: '成员管理' },
@@ -26,6 +23,32 @@ export const appMenus = [
   { key: '/audit-logs', icon: AuditOutlined, label: '操作日志', adminOnly: true },
   { key: '/settings', icon: SettingOutlined, label: '系统设置', adminOnly: true },
 ];
+
+type PageMeta = {
+  title: string;
+  parentTitle?: string;
+  sectionKey?: string;
+};
+
+const dashboardRouteMeta: Array<{ test: RegExp; meta: PageMeta }> = [
+  { test: /^\/dashboard$/, meta: { title: '首页统计' } },
+  { test: /^\/members$/, meta: { title: '成员管理' } },
+  { test: /^\/members\/[^/]+$/, meta: { title: '成员详情', parentTitle: '成员管理' } },
+  { test: /^\/assets$/, meta: { title: '家族资料', parentTitle: '成员管理' } },
+  { test: /^\/graph$/, meta: { title: '关系图谱', parentTitle: '成员管理' } },
+  { test: /^\/kinship$/, meta: { title: '称呼计算', parentTitle: '成员管理' } },
+  { test: /^\/supplement-requests$/, meta: { title: '资料补充' } },
+  { test: /^\/changelog$/, meta: { title: '版本更新日志' } },
+  { test: /^\/users$/, meta: { title: '用户权限', parentTitle: '系统设置' } },
+  { test: /^\/audit-logs$/, meta: { title: '操作日志', parentTitle: '系统设置' } },
+  { test: /^\/settings$/, meta: { title: '系统设置' } },
+  { test: /^\/login$/, meta: { title: '登录' } },
+];
+
+export function resolvePageMeta(pathname: string): PageMeta {
+  const matched = dashboardRouteMeta.find((item) => item.test.test(pathname));
+  return matched?.meta ?? { title: '家族姓氏系统' };
+}
 
 export const kinshipTokenOptions = [
   { label: '爸爸', value: 'F' },

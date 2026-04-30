@@ -13,13 +13,27 @@ export default function LoginPage() {
   const router = useRouter();
   const { token, login } = useAuth();
   const [submitting, setSubmitting] = useState(false);
+  const [redirectPath, setRedirectPath] = useState('/dashboard');
   const { message } = App.useApp();
 
   useEffect(() => {
-    if (token) {
-      router.replace('/dashboard');
+    if (typeof window === 'undefined') {
+      return;
     }
-  }, [router, token]);
+
+    const params = new URLSearchParams(window.location.search);
+    const nextRedirect = params.get('redirect');
+
+    if (nextRedirect?.startsWith('/')) {
+      setRedirectPath(nextRedirect);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (token) {
+      router.replace(redirectPath);
+    }
+  }, [redirectPath, router, token]);
 
   return (
     <div className="login-page">
@@ -83,7 +97,7 @@ export default function LoginPage() {
                   const result = await api.login(values);
                   login(result.accessToken, result.user);
                   message.success('登录成功，正在进入系统');
-                  router.replace('/dashboard');
+                  router.replace(redirectPath);
                 } catch (error) {
                   message.error(error instanceof ApiError ? error.message : '登录失败，请稍后重试');
                 } finally {

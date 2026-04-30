@@ -1,7 +1,7 @@
 'use client';
 
 import { Result, Spin } from 'antd';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
 import { useAuth } from './auth-provider';
 
@@ -13,15 +13,27 @@ export function AuthGuard({
   requireAdmin?: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { initialized, token, isAdmin } = useAuth();
+  const hasOptimisticSession = !initialized && Boolean(token);
 
   useEffect(() => {
     if (initialized && !token) {
-      router.replace('/login');
+      const redirectTarget = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
+      router.replace(`/login?redirect=${encodeURIComponent(redirectTarget)}`);
     }
-  }, [initialized, router, token]);
+  }, [initialized, pathname, router, searchParams, token]);
 
-  if (!initialized || !token) {
+  if (!initialized && !hasOptimisticSession) {
+    return (
+      <div className="page-center">
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  if (initialized && !token) {
     return (
       <div className="page-center">
         <Spin size="large" />

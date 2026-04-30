@@ -1,8 +1,15 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { api, ApiError } from '@/lib/api';
-import { TOKEN_STORAGE_KEY, USER_STORAGE_KEY } from '@/lib/constants';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from 'react';
+import { api, ApiError, getRuntimeAccessToken, setRuntimeAccessToken } from '@/lib/api';
 import type { AuthUser } from '@/lib/types';
 
 interface AuthContextValue {
@@ -17,31 +24,148 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const AUTH_SESSION_STORAGE_KEY = 'fisrtname:auth-session';
+const AUTH_LOCAL_STORAGE_KEY = 'fisrtname:auth-session:persistent';
+
+type PersistedAuthSession = {
+  accessToken: string | null;
+  user: AuthUser | null;
+};
+
+function readPersistedAuthSession() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw =
+      window.sessionStorage.getItem(AUTH_SESSION_STORAGE_KEY) ??
+      window.localStorage.getItem(AUTH_LOCAL_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    return JSON.parse(raw) as PersistedAuthSession;
+  } catch {
+    return null;
+  }
+}
+
+function persistAuthSession(session: PersistedAuthSession | null) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  if (!session?.user || !session.accessToken) {
+    window.sessionStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
+    window.localStorage.removeItem(AUTH_LOCAL_STORAGE_KEY);
+    return;
+  }
+
+  const serialized = JSON.stringify(session);
+  window.sessionStorage.setItem(AUTH_SESSION_STORAGE_KEY, serialized);
+  window.localStorage.setItem(AUTH_LOCAL_STORAGE_KEY, serialized);
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(() => readPersistedAuthSession()?.user ?? null);
   const [initialized, setInitialized] = useState(false);
 
+  useLayoutEffect(() => {
+    const persistedSession = readPersistedAuthSession();
+    if (persistedSession?.accessToken && persistedSession.user) {
+      setRuntimeAccessToken(persistedSession.accessToken);
+      setToken((current) => current ?? persistedSession.accessToken);
+      setUser((current) => current ?? persistedSession.user);
+    }
+  }, []);
+
   useEffect(() => {
-    const savedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
-    const savedUser = localStorage.getItem(USER_STORAGE_KEY);
+    const handleAuthCleared = () => {
+      setToken(null);
+      setUser(null);
+      persistAuthSession(null);
+    };
 
-    if (savedToken) {
-      setToken(savedToken);
-    }
+    const handleTokenRefreshed = (event: Event) => {
+      const detail = (event as CustomEvent<{ token?: string; user?: AuthUser }>).detail;
+      if (!detail?.token) {
+        return;
+      }
 
-    if (savedUser) {
-      setUser(JSON.parse(savedUser) as AuthUser);
-    }
+      setToken(detail.token);
+      if (detail.user) {
+        setUser(detail.user);
+        persistAuthSession({
+          accessToken: detail.token,
+          user: detail.user,
+        });
+      }
+    };
 
-    setInitialized(true);
+    window.addEventListener('fisrtname:auth-cleared', handleAuthCleared);
+    window.addEventListener('fisrtname:token-refreshed', handleTokenRefreshed as EventListener);
+
+    return () => {
+      window.removeEventListener('fisrtname:auth-cleared', handleAuthCleared);
+      window.removeEventListener(
+        'fisrtname:token-refreshed',
+        handleTokenRefreshed as EventListener,
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const bootstrapSession = async () => {
+      try {
+        const nextSession = await api.refresh();
+        if (cancelled) {
+          return;
+        }
+
+        setToken(nextSession.accessToken);
+        setUser(nextSession.user);
+        persistAuthSession({
+          accessToken: nextSession.accessToken,
+          user: nextSession.user,
+        });
+      } catch {
+        if (cancelled) {
+          return;
+        }
+
+        const persistedSession = readPersistedAuthSession();
+
+        if (!persistedSession?.accessToken || !persistedSession.user) {
+          setToken(null);
+          setUser(null);
+          persistAuthSession(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setInitialized(true);
+        }
+      }
+    };
+
+    void bootstrapSession();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const login = useCallback((nextToken: string, nextUser: AuthUser) => {
-    localStorage.setItem(TOKEN_STORAGE_KEY, nextToken);
-    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(nextUser));
+    setRuntimeAccessToken(nextToken);
     setToken(nextToken);
     setUser(nextUser);
+    persistAuthSession({
+      accessToken: nextToken,
+      user: nextUser,
+    });
   }, []);
 
   const logout = useCallback(async () => {
@@ -50,8 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // ignore logout failure
     } finally {
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
-      localStorage.removeItem(USER_STORAGE_KEY);
+      setRuntimeAccessToken(null);
       setToken(null);
       setUser(null);
     }
@@ -59,15 +182,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshProfile = useCallback(async () => {
     try {
-      const nextUser = await api.me(token);
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(nextUser));
+      const nextUser = await api.me();
       setUser(nextUser);
+      persistAuthSession({
+        accessToken: getRuntimeAccessToken(),
+        user: nextUser,
+      });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         await logout();
       }
     }
-  }, [logout, token]);
+  }, [logout]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

@@ -1,9 +1,22 @@
 'use client';
 
+import { HistoryOutlined, LinkOutlined } from '@ant-design/icons';
 import { useMutation } from '@tanstack/react-query';
-import { App, Button, Card, Col, Divider, Row, Select, Space, Tag, Typography } from 'antd';
+import {
+  App,
+  Button,
+  Card,
+  Col,
+  Divider,
+  Row,
+  Select,
+  Space,
+  Tag,
+  Typography,
+} from 'antd';
 import Link from 'next/link';
-import { useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { AuthGuard } from '@/components/auth-guard';
 import { RemoteMemberSelect } from '@/components/remote-member-select';
 import { api, ApiError } from '@/lib/api';
@@ -11,6 +24,15 @@ import { kinshipTokenOptions } from '@/lib/constants';
 import type { KinshipResult, MemberKinshipResponse } from '@/lib/types';
 
 const { Paragraph, Text, Title } = Typography;
+
+const pathPresets = [
+  { label: '父亲', tokens: ['F'] },
+  { label: '母亲', tokens: ['M'] },
+  { label: '爷爷', tokens: ['F', 'F'] },
+  { label: '奶奶', tokens: ['F', 'M'] },
+  { label: '外公', tokens: ['M', 'F'] },
+  { label: '姐姐', tokens: ['OS'] },
+];
 
 function ResultCard({ title, result }: { title: string; result?: KinshipResult }) {
   return (
@@ -44,24 +66,74 @@ function ResultCard({ title, result }: { title: string; result?: KinshipResult }
 
 export default function KinshipPage() {
   const { message } = App.useApp();
-  const [leftMemberId, setLeftMemberId] = useState<string>();
-  const [rightMemberId, setRightMemberId] = useState<string>();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [leftMemberId, setLeftMemberId] = useState<string | undefined>(
+    searchParams.get('left') ?? undefined,
+  );
+  const [rightMemberId, setRightMemberId] = useState<string | undefined>(
+    searchParams.get('right') ?? undefined,
+  );
   const [tokens, setTokens] = useState<string[]>([]);
   const [subjectGender, setSubjectGender] = useState<'MALE' | 'FEMALE' | 'UNKNOWN'>('MALE');
   const [memberResult, setMemberResult] = useState<MemberKinshipResponse>();
   const [pathResult, setPathResult] = useState<KinshipResult>();
+  const [recentSummary, setRecentSummary] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLeftMemberId(searchParams.get('left') ?? undefined);
+    setRightMemberId(searchParams.get('right') ?? undefined);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    setRecentSummary(window.localStorage.getItem('fisrtname:last-kinship-summary'));
+  }, []);
+
+  const updateSearchParams = (patch: Record<string, string | undefined>) => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+
+    Object.entries(patch).forEach(([key, value]) => {
+      if (value) {
+        nextParams.set(key, value);
+      } else {
+        nextParams.delete(key);
+      }
+    });
+
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
+  };
 
   const memberCalcMutation = useMutation({
     mutationFn: () =>
       api.calcMemberKinship({ sourceMemberId: leftMemberId!, targetMemberId: rightMemberId! }),
-    onSuccess: (result) => setMemberResult(result),
+    onSuccess: (result) => {
+      setMemberResult(result);
+      if (typeof window !== 'undefined') {
+        const summary = `${result.source.name} -> ${result.target.name}：${result.sourceToTarget.displayTerm}`;
+        window.localStorage.setItem('fisrtname:last-kinship-summary', summary);
+        setRecentSummary(summary);
+      }
+    },
     onError: (error) =>
       message.error(error instanceof ApiError ? error.message : '成员称呼计算失败'),
   });
 
   const pathCalcMutation = useMutation({
     mutationFn: () => api.calcPathKinship({ tokens, subjectGender }),
-    onSuccess: (result) => setPathResult(result),
+    onSuccess: (result) => {
+      setPathResult(result);
+      if (typeof window !== 'undefined') {
+        const summary = `路径 ${result.chainText}：${result.displayTerm}`;
+        window.localStorage.setItem('fisrtname:last-kinship-summary', summary);
+        setRecentSummary(summary);
+      }
+    },
     onError: (error) =>
       message.error(error instanceof ApiError ? error.message : '路径称呼计算失败'),
   });
@@ -70,14 +142,24 @@ export default function KinshipPage() {
     <AuthGuard>
       <div className="page-stack">
         <Card className="soft-panel">
-          <Space direction="vertical" size={4}>
-            <Title level={3} style={{ margin: 0 }}>
-              亲戚称呼计算
-            </Title>
-            <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              支持“成员对成员”自动推算，也支持以“我”为起点的关系路径选择器计算。
-            </Paragraph>
-          </Space>
+          <div className="page-hero">
+            <div className="page-hero-copy">
+              <div className="page-eyebrow">Kinship Lab</div>
+              <Title level={3} className="page-hero-title">
+                亲戚称呼计算
+              </Title>
+              <Paragraph className="page-hero-desc">
+                既可以按两位成员自动互算，也可以从“我”的角度逐步拼装关系路径，适合核对称呼和回看路径依据。
+              </Paragraph>
+            </div>
+            <div className="page-hero-actions">
+              {recentSummary ? (
+                <Tag icon={<HistoryOutlined />} color="processing">
+                  最近一次：{recentSummary}
+                </Tag>
+              ) : null}
+            </div>
+          </div>
         </Card>
 
         <Row gutter={[16, 16]}>
@@ -108,7 +190,10 @@ export default function KinshipPage() {
                     <div className="kinship-member-side-title">左侧成员（称呼发起方）</div>
                     <RemoteMemberSelect
                       value={leftMemberId}
-                      onChange={setLeftMemberId}
+                      onChange={(value) => {
+                        setLeftMemberId(value);
+                        updateSearchParams({ left: value });
+                      }}
                       placeholder="例如：我"
                     />
                   </div>
@@ -118,7 +203,10 @@ export default function KinshipPage() {
                     <div className="kinship-member-side-title">右侧成员（被称呼对象）</div>
                     <RemoteMemberSelect
                       value={rightMemberId}
-                      onChange={setRightMemberId}
+                      onChange={(value) => {
+                        setRightMemberId(value);
+                        updateSearchParams({ right: value });
+                      }}
                       placeholder="例如：某位亲属"
                     />
                   </div>
@@ -128,7 +216,7 @@ export default function KinshipPage() {
               {leftMemberId && rightMemberId ? (
                 <Button type="link" style={{ padding: 0, marginBottom: 12 }}>
                   <Link href={`/graph?memberId=${leftMemberId}&compareId=${rightMemberId}`}>
-                    在图谱中查看两人关系路径
+                    <LinkOutlined /> 在图谱中查看两人关系路径
                   </Link>
                 </Button>
               ) : null}
@@ -179,6 +267,18 @@ export default function KinshipPage() {
                     { label: '我（未知）', value: 'UNKNOWN' },
                   ]}
                 />
+
+                <div>
+                  <Text type="secondary">常用预设：</Text>
+                  <div className="kinship-preset-row" style={{ marginTop: 12 }}>
+                    {pathPresets.map((preset) => (
+                      <Button key={preset.label} onClick={() => setTokens(preset.tokens)}>
+                        {preset.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
                 <div>
                   <Text type="secondary">逐步选择关系路径：</Text>
                   <Space wrap style={{ marginTop: 12 }}>

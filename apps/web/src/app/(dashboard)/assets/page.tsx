@@ -25,6 +25,7 @@ import {
   Popconfirm,
   Row,
   Select,
+  Segmented,
   Space,
   Statistic,
   Switch,
@@ -32,9 +33,14 @@ import {
   Typography,
 } from 'antd';
 import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useDeferredValue, useEffect, useState } from 'react';
+import { useViewportMode } from '@/hooks/use-viewport-mode';
 import { AssetBatchModal } from '@/components/asset-batch-modal';
-import { AssetImportWizardModal } from '@/components/asset-import-wizard-modal';
+import {
+  AssetImportWizardDraft,
+  AssetImportWizardModal,
+} from '@/components/asset-import-wizard-modal';
 import { AssetImportResultModal } from '@/components/asset-import-result-modal';
 import { AuthGuard } from '@/components/auth-guard';
 import { useAuth } from '@/components/auth-provider';
@@ -98,22 +104,34 @@ function renderAssetPreview(asset: MemberAssetLibraryItem) {
 export default function AssetLibraryPage() {
   const { message } = App.useApp();
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { isAdmin } = useAuth();
-  const [keywordInput, setKeywordInput] = useState('');
-  const [category, setCategory] = useState<'PHOTO' | 'DOCUMENT' | undefined>();
-  const [tag, setTag] = useState<string | undefined>();
-  const [sourceType, setSourceType] = useState<string | undefined>();
-  const [hasSource, setHasSource] = useState(false);
-  const [hasDescription, setHasDescription] = useState(false);
-  const [hasTags, setHasTags] = useState(false);
-  const [page, setPage] = useState(1);
+  const { isMobile } = useViewportMode();
+  const [keywordInput, setKeywordInput] = useState(searchParams.get('keyword') ?? '');
+  const [category, setCategory] = useState<'PHOTO' | 'DOCUMENT' | undefined>(
+    (searchParams.get('category') as 'PHOTO' | 'DOCUMENT' | null) ?? undefined,
+  );
+  const [tag, setTag] = useState<string | undefined>(searchParams.get('tag') ?? undefined);
+  const [sourceType, setSourceType] = useState<string | undefined>(
+    searchParams.get('sourceType') ?? undefined,
+  );
+  const [hasSource, setHasSource] = useState(searchParams.get('hasSource') === '1');
+  const [hasDescription, setHasDescription] = useState(searchParams.get('hasDescription') === '1');
+  const [hasTags, setHasTags] = useState(searchParams.get('hasTags') === '1');
+  const [page, setPage] = useState(Math.max(1, Number(searchParams.get('page') ?? 1)));
   const [pageSize, setPageSize] = useState(18);
   const [editingAsset, setEditingAsset] = useState<MemberAssetLibraryItem | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [lastImportResult, setLastImportResult] = useState<AssetImportBatchResult | null>(null);
+  const [lastImportDraft, setLastImportDraft] = useState<AssetImportWizardDraft | null>(null);
+  const [retryImportDraft, setRetryImportDraft] = useState<AssetImportWizardDraft | null>(null);
   const [focusedImportBatch, setFocusedImportBatch] = useState<AssetImportBatchView | null>(null);
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [batchAction, setBatchAction] = useState<Extract<AssetBatchAction, 'APPEND_TAGS' | 'SET_SOURCE_TYPE'> | null>(null);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [density, setDensity] = useState<'comfortable' | 'compact'>(isMobile ? 'compact' : 'comfortable');
   const deferredKeyword = useDeferredValue(keywordInput.trim());
   const assetTagsQuery = useQuery({
     queryKey: ['asset-tags', 'enabled'],
@@ -123,6 +141,23 @@ export default function AssetLibraryPage() {
     queryKey: ['asset-sources', 'enabled'],
     queryFn: () => api.getAssetSources(),
   });
+
+  useEffect(() => {
+    setKeywordInput(searchParams.get('keyword') ?? '');
+    setCategory((searchParams.get('category') as 'PHOTO' | 'DOCUMENT' | null) ?? undefined);
+    setTag(searchParams.get('tag') ?? undefined);
+    setSourceType(searchParams.get('sourceType') ?? undefined);
+    setHasSource(searchParams.get('hasSource') === '1');
+    setHasDescription(searchParams.get('hasDescription') === '1');
+    setHasTags(searchParams.get('hasTags') === '1');
+    setPage(Math.max(1, Number(searchParams.get('page') ?? 1)));
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (isMobile) {
+      setDensity('compact');
+    }
+  }, [isMobile]);
 
   useEffect(() => {
     setPage(1);
@@ -141,6 +176,45 @@ export default function AssetLibraryPage() {
   useEffect(() => {
     setSelectedAssetIds([]);
   }, [page, deferredKeyword, category, tag, sourceType, hasSource, hasDescription, hasTags, pageSize]);
+
+  useEffect(() => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    const nextEntries: Record<string, string | undefined> = {
+      keyword: deferredKeyword || undefined,
+      category,
+      tag,
+      sourceType,
+      hasSource: hasSource ? '1' : undefined,
+      hasDescription: hasDescription ? '1' : undefined,
+      hasTags: hasTags ? '1' : undefined,
+      page: page > 1 ? String(page) : undefined,
+    };
+
+    Object.entries(nextEntries).forEach(([key, value]) => {
+      if (value) {
+        nextParams.set(key, value);
+      } else {
+        nextParams.delete(key);
+      }
+    });
+
+    const nextQuery = nextParams.toString();
+    if (nextQuery !== searchParams.toString()) {
+      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
+    }
+  }, [
+    category,
+    deferredKeyword,
+    hasDescription,
+    hasSource,
+    hasTags,
+    page,
+    pathname,
+    router,
+    searchParams,
+    sourceType,
+    tag,
+  ]);
 
   const assetLibraryQuery = useQuery({
     queryKey: [
@@ -311,6 +385,16 @@ export default function AssetLibraryPage() {
     label: `${item.name} (${item.useCount})`,
     value: item.name,
   }));
+  const effectiveDensity = isMobile ? 'compact' : density;
+  const activeFilterCount = [
+    deferredKeyword,
+    category,
+    tag,
+    sourceType,
+    hasSource ? 'hasSource' : '',
+    hasDescription ? 'hasDescription' : '',
+    hasTags ? 'hasTags' : '',
+  ].filter(Boolean).length;
 
   const toggleAssetSelection = (assetId: string, checked: boolean) => {
     setSelectedAssetIds((current) =>
@@ -329,68 +413,88 @@ export default function AssetLibraryPage() {
     setLastImportResult(null);
   };
 
+  const retryFailedImport = (failureIndexes: number[]) => {
+    if (!lastImportDraft || !lastImportResult) {
+      return;
+    }
+
+    const failedIndexSet = new Set(failureIndexes);
+    const nextFiles = lastImportDraft.files.filter((_, index) => failedIndexSet.has(index));
+
+    if (nextFiles.length === 0) {
+      message.warning('当前没有可重试的失败文件。');
+      return;
+    }
+
+    setRetryImportDraft({
+      ...lastImportDraft,
+      files: nextFiles,
+    });
+    setImportOpen(true);
+    setLastImportResult(null);
+  };
+
   return (
     <AuthGuard>
       <div className="page-stack">
         <Card className="soft-panel">
-          <Space
-            direction="vertical"
-            size={8}
-            style={{ width: '100%', alignItems: 'stretch' }}
-          >
-            <div className="asset-library-header">
-              <div>
-                <Title level={3} style={{ margin: 0 }}>
-                  家族资料中心
-                </Title>
-                <Text type="secondary">
-                  以全局视角检索家族相册、扫描件、证书与口述资料，让成员资料真正形成可沉淀的家族资源库。
-                </Text>
-              </div>
-              <Space wrap>
-                {isAdmin ? (
-                  <Button type="primary" icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>
-                    批量导入向导
-                  </Button>
-                ) : null}
-                <Button>
-                  <Link href="/members">前往成员管理</Link>
-                </Button>
-                {isAdmin ? (
-                  <Text type="secondary">上传入口仍在成员详情页，以保证资料始终绑定到具体成员。</Text>
-                ) : null}
-              </Space>
+          <div className="page-hero">
+            <div className="page-hero-copy">
+              <div className="page-eyebrow">Family Archive</div>
+              <Title level={3} className="page-hero-title">
+                家族资料中心
+              </Title>
+              <Paragraph className="page-hero-desc">
+                先检索，再整理。把家族相册、扫描件、证书与口述资料沉淀为一套可持续治理的资料资产库。
+              </Paragraph>
             </div>
-          </Space>
+            <div className="page-hero-actions">
+              {isAdmin ? (
+                <Button
+                  type="primary"
+                  icon={<UploadOutlined />}
+                  onClick={() => {
+                    setRetryImportDraft(null);
+                    setImportOpen(true);
+                  }}
+                >
+                  {isMobile ? '批量导入' : '批量导入向导'}
+                </Button>
+              ) : null}
+              <Button>
+                <Link href="/members">{isMobile ? '成员管理' : '前往成员管理'}</Link>
+              </Button>
+            </div>
+          </div>
         </Card>
 
         <Row gutter={[16, 16]}>
-          <Col xs={24} sm={12} lg={8} xl={4}>
+          <Col xs={12} sm={12} lg={8} xl={4}>
             <Card className="stat-card" loading={assetLibraryQuery.isLoading}>
               <Statistic title="资料总数" value={response?.overview.totalAssets} />
             </Card>
           </Col>
-          <Col xs={24} sm={12} lg={8} xl={4}>
+          <Col xs={12} sm={12} lg={8} xl={4}>
             <Card className="stat-card" loading={assetLibraryQuery.isLoading}>
               <Statistic title="照片资料" value={response?.overview.totalPhotos} />
             </Card>
           </Col>
-          <Col xs={24} sm={12} lg={8} xl={4}>
+          <Col xs={12} sm={12} lg={8} xl={4}>
             <Card className="stat-card" loading={assetLibraryQuery.isLoading}>
               <Statistic title="附件资料" value={response?.overview.totalDocuments} />
             </Card>
           </Col>
-          <Col xs={24} sm={12} lg={8} xl={4}>
+          <Col xs={12} sm={12} lg={8} xl={4}>
             <Card className="stat-card" loading={assetLibraryQuery.isLoading}>
               <Statistic title="已打标签" value={response?.overview.taggedAssets} />
             </Card>
           </Col>
-          <Col xs={24} sm={12} lg={8} xl={4}>
+          <Col xs={12} sm={12} lg={8} xl={4}>
             <Card className="stat-card" loading={assetLibraryQuery.isLoading}>
               <Statistic title="已标来源" value={response?.overview.sourcedAssets} />
             </Card>
           </Col>
-          <Col xs={24} sm={12} lg={8} xl={4}>
+          <Col xs={12} sm={12} lg={8} xl={4}>
             <Card className="stat-card" loading={assetLibraryQuery.isLoading}>
               <Statistic title="关联成员" value={response?.overview.linkedMembers} />
             </Card>
@@ -453,8 +557,22 @@ export default function AssetLibraryPage() {
                               })
                             }
                           >
-                            查看本批次资料
+                            {isMobile ? '查看批次' : '查看本批次资料'}
                           </Button>
+                          {lastImportResult?.auditLogId === item.id &&
+                          lastImportDraft &&
+                          (lastImportResult.failedCount ?? 0) > 0 ? (
+                            <Button
+                              size="small"
+                              onClick={() =>
+                                retryFailedImport(
+                                  lastImportResult.failures.map((failure) => failure.inputIndex),
+                                )
+                              }
+                            >
+                              重试失败项
+                            </Button>
+                          ) : null}
                           <Button
                             size="small"
                             type="primary"
@@ -469,7 +587,7 @@ export default function AssetLibraryPage() {
                               )
                             }
                           >
-                            继续批量整理
+                            {isMobile ? '继续整理' : '继续批量整理'}
                           </Button>
                         </Space>
                       </Space>
@@ -482,69 +600,129 @@ export default function AssetLibraryPage() {
         ) : null}
 
         <Card className="soft-panel">
-          <Space direction="vertical" size={16} style={{ width: '100%' }}>
-            <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
-              <Space wrap>
-                <Input
-                  allowClear
-                  value={keywordInput}
-                  prefix={<SearchOutlined />}
-                  placeholder="搜索资料标题、原文件名、成员姓名、来源、描述"
-                  style={{ width: 320 }}
-                  onChange={(event) => setKeywordInput(event.target.value)}
-                />
-                <Select
-                  allowClear
-                  value={category}
-                  style={{ width: 150 }}
-                  placeholder="资料类型"
+          <div className="filter-panel">
+            <div className="filter-panel-header">
+              <div>
+                <Title level={5} className="filter-panel-title">
+                  资料检索区
+                </Title>
+                <Text className="results-hint">
+                  当前筛到 {response?.total ?? 0} 项，第 {response?.page ?? 1} /{' '}
+                  {response ? Math.max(1, Math.ceil(response.total / response.pageSize)) : 1} 页。
+                </Text>
+              </div>
+              <div className="filter-panel-meta">
+                <Tag color={activeFilterCount > 0 ? 'processing' : 'default'}>
+                  已启用筛选 {activeFilterCount} 项
+                </Tag>
+                <Segmented
+                  value={effectiveDensity}
                   options={[
-                    { label: '照片资料', value: 'PHOTO' },
-                    { label: '附件资料', value: 'DOCUMENT' },
+                    { label: '舒展', value: 'comfortable' },
+                    { label: '紧凑', value: 'compact' },
                   ]}
-                  onChange={setCategory}
+                  onChange={(value) =>
+                    setDensity(value as 'comfortable' | 'compact')
+                  }
+                  disabled={isMobile}
                 />
-                <Select
-                  allowClear
-                  showSearch
-                  value={tag}
-                  style={{ width: 200 }}
-                  placeholder="按标签筛选"
-                  suffixIcon={<FilterOutlined />}
-                  options={mergedTagOptions}
-                  onChange={setTag}
-                />
-                <Select
-                  allowClear
-                  showSearch
-                  value={sourceType}
-                  style={{ width: 220 }}
-                  placeholder="按来源类型筛选"
-                  options={sourceTypeOptions}
-                  onChange={setSourceType}
-                  optionFilterProp="label"
-                />
-              </Space>
-              <Text type="secondary">
-                当前筛到 {response?.total ?? 0} 项，第 {response?.page ?? 1} /{' '}
-                {response ? Math.max(1, Math.ceil(response.total / response.pageSize)) : 1} 页
-              </Text>
-            </Space>
+                <Button
+                  icon={<FilterOutlined />}
+                  onClick={() => setShowAdvancedFilters((current) => !current)}
+                >
+                  {showAdvancedFilters
+                    ? isMobile
+                      ? '收起筛选'
+                      : '收起高级筛选'
+                    : isMobile
+                      ? '高级筛选'
+                      : '展开高级筛选'}
+                </Button>
+              </div>
+            </div>
 
-            <Space wrap size={[16, 12]}>
-              <Space size={8}>
-                <Switch size="small" checked={hasSource} onChange={setHasSource} />
-                <Text>仅看已标来源</Text>
+            <div className="filter-grid">
+              <Input
+                allowClear
+                value={keywordInput}
+                prefix={<SearchOutlined />}
+                placeholder="搜索资料标题、原文件名、成员姓名、来源、描述"
+                onChange={(event) => setKeywordInput(event.target.value)}
+              />
+              <Select
+                allowClear
+                value={category}
+                placeholder="资料类型"
+                options={[
+                  { label: '照片资料', value: 'PHOTO' },
+                  { label: '附件资料', value: 'DOCUMENT' },
+                ]}
+                onChange={(value) => {
+                  setCategory(value);
+                  setPage(1);
+                }}
+              />
+              <Select
+                allowClear
+                showSearch
+                value={tag}
+                placeholder="按标签筛选"
+                suffixIcon={<FilterOutlined />}
+                options={mergedTagOptions}
+                onChange={(value) => {
+                  setTag(value);
+                  setPage(1);
+                }}
+              />
+              <Space wrap>
+                <Button
+                  onClick={() => {
+                    setKeywordInput('');
+                    setCategory(undefined);
+                    setTag(undefined);
+                    setSourceType(undefined);
+                    setHasSource(false);
+                    setHasDescription(false);
+                    setHasTags(false);
+                    setPage(1);
+                    router.replace(pathname);
+                  }}
+                >
+                  清空筛选
+                </Button>
               </Space>
-              <Space size={8}>
-                <Switch size="small" checked={hasDescription} onChange={setHasDescription} />
-                <Text>仅看已写描述</Text>
-              </Space>
-              <Space size={8}>
-                <Switch size="small" checked={hasTags} onChange={setHasTags} />
-                <Text>仅看已打标签</Text>
-              </Space>
-            </Space>
+            </div>
+
+            {showAdvancedFilters ? (
+              <div className="filter-advanced">
+                <div className="filter-grid">
+                  <Select
+                    allowClear
+                    showSearch
+                    value={sourceType}
+                    placeholder="按来源类型筛选"
+                    options={sourceTypeOptions}
+                    onChange={(value) => {
+                      setSourceType(value);
+                      setPage(1);
+                    }}
+                    optionFilterProp="label"
+                  />
+                  <Space size={8}>
+                    <Switch size="small" checked={hasSource} onChange={setHasSource} />
+                    <Text>仅看已标来源</Text>
+                  </Space>
+                  <Space size={8}>
+                    <Switch size="small" checked={hasDescription} onChange={setHasDescription} />
+                    <Text>仅看已写描述</Text>
+                  </Space>
+                  <Space size={8}>
+                    <Switch size="small" checked={hasTags} onChange={setHasTags} />
+                    <Text>仅看已打标签</Text>
+                  </Space>
+                </div>
+              </div>
+            ) : null}
 
             {focusedImportBatch ? (
               <div className="member-asset-inline-note">
@@ -566,74 +744,77 @@ export default function AssetLibraryPage() {
             ) : null}
 
             {isAdmin ? (
-              <div className="asset-batch-toolbar">
-                <Space wrap>
-                  <Text strong>当前已选 {selectedCount} 项</Text>
-                  <Button
-                    size="small"
-                    disabled={currentPageAssetIds.length === 0}
-                    onClick={() =>
-                      setSelectedAssetIds((current) =>
-                        isAllCurrentPageSelected
-                          ? current.filter((id) => !currentPageAssetIds.includes(id))
-                          : Array.from(new Set([...current, ...currentPageAssetIds])),
-                      )
-                    }
-                  >
-                    {isAllCurrentPageSelected ? '取消当前页全选' : '全选当前页'}
-                  </Button>
-                  <Button
-                    size="small"
-                    disabled={selectedCount === 0}
-                    onClick={() => setSelectedAssetIds([])}
-                  >
-                    清空选择
-                  </Button>
-                </Space>
-                <Space wrap>
-                  <Button
-                    size="small"
-                    disabled={selectedCount === 0}
-                    loading={batchOperateMutation.isPending}
-                    onClick={() => setBatchAction('APPEND_TAGS')}
-                  >
-                    批量追加标签
-                  </Button>
-                  <Button
-                    size="small"
-                    disabled={selectedCount === 0}
-                    loading={batchOperateMutation.isPending}
-                    onClick={() => setBatchAction('SET_SOURCE_TYPE')}
-                  >
-                    批量设置来源
-                  </Button>
-                  <Popconfirm
-                    title={`确定批量删除这 ${selectedCount} 项资料吗？`}
-                    description="删除后资料会从系统中移除，请谨慎操作。"
-                    disabled={selectedCount === 0}
-                    onConfirm={() =>
-                      batchOperateMutation.mutate({
-                        action: 'DELETE',
-                        assetIds: selectedAssetIds,
-                      })
-                    }
-                  >
+              <div className="sticky-toolbar">
+                <div className="sticky-toolbar-inner">
+                  <div className="sticky-toolbar-context">
+                    <Text strong>批量整理区</Text>
+                    <Text type="secondary">当前已选 {selectedCount} 项，可继续补标签、补来源或清空本页选择。</Text>
+                  </div>
+                  <Space wrap className="sticky-toolbar-actions">
                     <Button
                       size="small"
-                      danger
+                      disabled={currentPageAssetIds.length === 0}
+                      onClick={() =>
+                        setSelectedAssetIds((current) =>
+                          isAllCurrentPageSelected
+                            ? current.filter((id) => !currentPageAssetIds.includes(id))
+                            : Array.from(new Set([...current, ...currentPageAssetIds])),
+                        )
+                      }
+                    >
+                      {isAllCurrentPageSelected ? '取消当前页全选' : '全选当前页'}
+                    </Button>
+                    <Button
+                      size="small"
+                      disabled={selectedCount === 0}
+                      onClick={() => setSelectedAssetIds([])}
+                    >
+                      清空选择
+                    </Button>
+                    <Button
+                      size="small"
                       disabled={selectedCount === 0}
                       loading={batchOperateMutation.isPending}
+                      onClick={() => setBatchAction('APPEND_TAGS')}
                     >
-                      批量删除
+                      批量追加标签
                     </Button>
-                  </Popconfirm>
-                </Space>
+                    <Button
+                      size="small"
+                      disabled={selectedCount === 0}
+                      loading={batchOperateMutation.isPending}
+                      onClick={() => setBatchAction('SET_SOURCE_TYPE')}
+                    >
+                      批量设置来源
+                    </Button>
+                    <Popconfirm
+                      title={`确定批量删除这 ${selectedCount} 项资料吗？`}
+                      description="删除后资料会从系统中移除，请谨慎操作。"
+                      disabled={selectedCount === 0}
+                      onConfirm={() =>
+                        batchOperateMutation.mutate({
+                          action: 'DELETE',
+                          assetIds: selectedAssetIds,
+                        })
+                      }
+                    >
+                      <Button
+                        size="small"
+                        danger
+                        disabled={selectedCount === 0}
+                        loading={batchOperateMutation.isPending}
+                      >
+                        批量删除
+                      </Button>
+                    </Popconfirm>
+                  </Space>
+                </div>
               </div>
             ) : null}
 
             {mergedTagOptions.length > 0 ? (
               <div className="asset-library-tag-wall">
-                {mergedTagOptions.slice(0, 18).map((item) => (
+                {mergedTagOptions.slice(0, isMobile ? 8 : 18).map((item) => (
                   <Tag
                     key={item.value}
                     color={tag === item.value ? 'processing' : 'default'}
@@ -645,10 +826,13 @@ export default function AssetLibraryPage() {
                 ))}
               </div>
             ) : null}
-          </Space>
+          </div>
         </Card>
 
-        <Card className="soft-panel" loading={assetLibraryQuery.isLoading}>
+        <Card
+          className={`soft-panel${effectiveDensity === 'compact' ? ' asset-library-compact' : ''}`}
+          loading={assetLibraryQuery.isLoading}
+        >
           <List
             dataSource={response?.data ?? []}
             locale={{ emptyText: '当前条件下暂无匹配资料。' }}
@@ -667,13 +851,13 @@ export default function AssetLibraryPage() {
                       target="_blank"
                       rel="noreferrer"
                     >
-                      <LinkOutlined /> 打开
+                      {isMobile ? '打开' : <><LinkOutlined /> 打开</>}
                     </a>,
                     <Link key="member" href={`/members/${asset.member.id}`}>
-                      成员详情
+                      {isMobile ? '详情' : '成员详情'}
                     </Link>,
                     <Link key="graph" href={`/graph?memberId=${asset.member.id}`}>
-                      <NodeIndexOutlined /> 图谱
+                      {isMobile ? '图谱' : <><NodeIndexOutlined /> 图谱</>}
                     </Link>,
                   ]}
                 >
@@ -758,7 +942,7 @@ export default function AssetLibraryPage() {
                           icon={<EditOutlined />}
                           onClick={() => setEditingAsset(asset)}
                         >
-                          编辑资料信息
+                          {isMobile ? '编辑' : '编辑资料信息'}
                         </Button>
                         <Popconfirm
                           title="确定删除这项资料吗？"
@@ -778,7 +962,7 @@ export default function AssetLibraryPage() {
 
           {response && response.total > response.pageSize ? (
             <div className="asset-library-pagination">
-              <Space wrap>
+              <Space wrap className="asset-library-pagination-actions">
                 <Button
                   disabled={page <= 1}
                   onClick={() => setPage((current) => Math.max(1, current - 1))}
@@ -838,8 +1022,24 @@ export default function AssetLibraryPage() {
         <AssetImportWizardModal
           open={importOpen}
           loading={importWizardMutation.isPending}
-          onCancel={() => setImportOpen(false)}
+          initialDraft={retryImportDraft}
+          initialStep={retryImportDraft ? 2 : 0}
+          onCancel={() => {
+            setImportOpen(false);
+            setRetryImportDraft(null);
+          }}
           onSubmit={async (values) => {
+            setLastImportDraft({
+              memberId: values.memberId,
+              category: values.category,
+              files: values.files,
+              sourceType: values.sourceType,
+              source: values.source,
+              tags: values.tags,
+              description: values.description,
+              titleMode: values.titleMode,
+              titlePrefix: values.titlePrefix,
+            });
             await importWizardMutation.mutateAsync({
               memberId: values.memberId,
               category: values.category,
@@ -850,6 +1050,7 @@ export default function AssetLibraryPage() {
               description: values.description,
               resolvedTitles: values.resolvedTitles,
             });
+            setRetryImportDraft(null);
           }}
         />
 
@@ -859,6 +1060,7 @@ export default function AssetLibraryPage() {
           onClose={() => setLastImportResult(null)}
           onViewBatch={(payload) => focusImportBatch(payload)}
           onContinueBatch={(payload) => focusImportBatch(payload, { preselect: true })}
+          onRetryFailed={(payload) => retryFailedImport(payload.failureIndexes)}
         />
 
         <AssetBatchModal

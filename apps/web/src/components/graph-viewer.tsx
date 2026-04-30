@@ -1,7 +1,13 @@
 'use client';
 
 import { Empty, Spin } from 'antd';
-import { useEffect, useRef, useState } from 'react';
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
 import type { GraphData } from '@/lib/types';
 
 function formatEdgeLabel(edge: GraphData['edges'][number]) {
@@ -12,23 +18,49 @@ function formatEdgeLabel(edge: GraphData['edges'][number]) {
   return edge.label;
 }
 
-export function GraphViewer({
-  data,
-  loading,
-  onNodeClick,
-  highlightedNodeIds = [],
-  highlightedEdgeIds = [],
-  targetNodeId,
-}: {
-  data?: GraphData;
-  loading?: boolean;
-  onNodeClick?: (id: string) => void;
-  highlightedNodeIds?: string[];
-  highlightedEdgeIds?: string[];
-  targetNodeId?: string;
-}) {
+export interface GraphViewerHandle {
+  fitView: () => void;
+}
+
+export const GraphViewer = forwardRef<
+  GraphViewerHandle,
+  {
+    data?: GraphData;
+    loading?: boolean;
+    onNodeClick?: (id: string) => void;
+    highlightedNodeIds?: string[];
+    highlightedEdgeIds?: string[];
+    targetNodeId?: string;
+  }
+>(function GraphViewer(
+  {
+    data,
+    loading,
+    onNodeClick,
+    highlightedNodeIds = [],
+    highlightedEdgeIds = [],
+    targetNodeId,
+  },
+  ref,
+) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const graphRef = useRef<{
+    destroy?: () => void;
+    render?: () => Promise<void>;
+    fitView?: () => void;
+    on?: (name: string, cb: (event: unknown) => void) => void;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    fitView: () => {
+      graphRef.current?.fitView?.();
+    },
+  }));
+
+  useEffect(() => {
+    setError(null);
+  }, [data, highlightedEdgeIds, highlightedNodeIds, targetNodeId]);
 
   useEffect(() => {
     if (!data || !containerRef.current) {
@@ -36,12 +68,6 @@ export function GraphViewer({
     }
 
     let destroyed = false;
-    let graph: {
-      destroy?: () => void;
-      render?: () => Promise<void>;
-      fitView?: () => void;
-      on?: (name: string, cb: (event: unknown) => void) => void;
-    } | null = null;
 
     const renderGraph = async () => {
       try {
@@ -50,7 +76,7 @@ export function GraphViewer({
           return;
         }
 
-        graph = new Graph({
+        graphRef.current = new Graph({
           container: containerRef.current,
           autoResize: true,
           data: {
@@ -73,9 +99,9 @@ export function GraphViewer({
                       ? '#7b1f1f'
                       : isTargetNode
                         ? '#0f766e'
-                      : node.gender === 'MALE'
-                        ? '#4c78a8'
-                        : '#d66a7b',
+                        : node.gender === 'MALE'
+                          ? '#4c78a8'
+                          : '#d66a7b',
                   stroke: isPathNode ? '#fbbf24' : isDeceased ? '#e3ddd3' : '#f3e6d0',
                   lineWidth: node.isCenter ? 4 : isSpecialNode ? 4 : 2,
                   labelFill: '#fffaf0',
@@ -137,7 +163,7 @@ export function GraphViewer({
           behaviors: ['drag-canvas', 'zoom-canvas', 'drag-element'],
         } as never);
 
-        graph.on?.('node:click', (event: unknown) => {
+        graphRef.current.on?.('node:click', (event: unknown) => {
           const payload = event as {
             data?: { target?: { id?: string }; data?: { id?: string } };
             target?: { id?: string; attributes?: { id?: string } };
@@ -153,8 +179,8 @@ export function GraphViewer({
           }
         });
 
-        await graph.render?.();
-        graph.fitView?.();
+        await graphRef.current.render?.();
+        graphRef.current.fitView?.();
       } catch (renderError) {
         setError(renderError instanceof Error ? renderError.message : '图谱渲染失败');
       }
@@ -164,7 +190,8 @@ export function GraphViewer({
 
     return () => {
       destroyed = true;
-      graph?.destroy?.();
+      graphRef.current?.destroy?.();
+      graphRef.current = null;
     };
   }, [data, highlightedEdgeIds, highlightedNodeIds, onNodeClick, targetNodeId]);
 
@@ -187,10 +214,10 @@ export function GraphViewer({
   if (!data) {
     return (
       <div className="graph-panel page-center">
-        <Empty description="请选择一个成员开始浏览关系图谱" />
+        <Empty description="请选择中心成员开始浏览关系图谱" />
       </div>
     );
   }
 
   return <div ref={containerRef} className="graph-panel" />;
-}
+});
