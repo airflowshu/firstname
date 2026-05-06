@@ -6,13 +6,7 @@ function normalizeStringList(value: unknown) {
     return [];
   }
 
-  return Array.from(
-    new Set(
-      value
-        .map((item) => String(item).trim())
-        .filter(Boolean),
-    ),
-  );
+  return Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean)));
 }
 
 export class BatchAssetOperationDto {

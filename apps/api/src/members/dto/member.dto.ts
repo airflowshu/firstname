@@ -29,13 +29,10 @@ function transformTagListInput(value: unknown) {
   }
 
   const normalize = (input: unknown[]) =>
-    Array.from(
-      new Set(
-        input
-          .map((item) => String(item).trim())
-          .filter(Boolean),
-      ),
-    ).slice(0, MAX_MEMBER_ASSET_TAGS);
+    Array.from(new Set(input.map((item) => String(item).trim()).filter(Boolean))).slice(
+      0,
+      MAX_MEMBER_ASSET_TAGS,
+    );
 
   if (Array.isArray(value)) {
     return normalize(value);
@@ -60,6 +57,10 @@ function transformTagListInput(value: unknown) {
   }
 
   return undefined;
+}
+
+function transformEnumText(value: unknown) {
+  return typeof value === 'string' ? value.trim().toUpperCase() : value;
 }
 
 export class CreateMemberDto {
@@ -185,6 +186,10 @@ export class CreateQuickRelativeDto {
   @IsIn(['father', 'mother', 'spouse', 'child', 'sibling'])
   relationType!: 'father' | 'mother' | 'spouse' | 'child' | 'sibling';
 
+  @IsOptional()
+  @IsString()
+  existingMemberId?: string;
+
   @ValidateNested()
   @Type(() => CreateMemberDto)
   member!: CreateMemberDto;
@@ -192,6 +197,7 @@ export class CreateQuickRelativeDto {
 
 export class MemberAssetQueryDto {
   @IsOptional()
+  @Transform(({ value }) => transformEnumText(value))
   @IsEnum(MemberAssetCategory)
   category?: MemberAssetCategory;
 

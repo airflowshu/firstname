@@ -38,7 +38,7 @@ export class KinshipService {
   }
 
   async createAlias(dto: UpsertKinshipAliasDto, operatorId: string) {
-    const existing = await this.prisma.kinshipAlias.findUnique({
+    const existing = await this.prisma.kinshipAlias.findFirst({
       where: { relationCode: dto.relationCode },
     });
 

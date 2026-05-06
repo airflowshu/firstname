@@ -1,4 +1,3 @@
-import { PartialType } from '@nestjs/mapped-types';
 import {
   Gender,
   LifeStatus,
@@ -6,7 +5,7 @@ import {
   SupplementRequestStatus,
   SupplementRequestType,
 } from '@prisma/client';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsDateString,
   IsEnum,
@@ -19,6 +18,10 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { MemberAssetMetadataDto } from '../../members/dto/member.dto';
+
+function transformEnumText(value: unknown) {
+  return typeof value === 'string' ? value.trim().toUpperCase() : value;
+}
 
 export class SupplementMemberPatchDto {
   @IsOptional()
@@ -92,6 +95,7 @@ export class CreateSupplementAssetRequestDto extends MemberAssetMetadataDto {
   @IsString()
   memberId!: string;
 
+  @Transform(({ value }) => transformEnumText(value))
   @IsEnum(MemberAssetCategory)
   category!: MemberAssetCategory;
 
@@ -115,6 +119,7 @@ export class SupplementRequestQueryDto {
   pageSize?: number = 10;
 
   @IsOptional()
+  @Transform(({ value }) => transformEnumText(value))
   @IsEnum(SupplementRequestStatus)
   status?: SupplementRequestStatus;
 
@@ -123,6 +128,7 @@ export class SupplementRequestQueryDto {
   keyword?: string;
 
   @IsOptional()
+  @Transform(({ value }) => transformEnumText(value))
   @IsEnum(SupplementRequestType)
   requestType?: SupplementRequestType;
 }

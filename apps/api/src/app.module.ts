@@ -1,15 +1,19 @@
 import { CacheModule } from '@nestjs/cache-manager';
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuditLogsModule } from './audit-logs/audit-logs.module';
 import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { PlatformRolesGuard } from './common/guards/platform-roles.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { TenantContextInterceptor } from './common/tenant/tenant-context.interceptor';
 import configuration from './config/configuration';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { FamiliesModule } from './families/families.module';
 import { GraphModule } from './graph/graph.module';
+import { InvitationsModule } from './invitations/invitations.module';
 import { KinshipModule } from './kinship/kinship.module';
 import { MembersModule } from './members/members.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -48,8 +52,10 @@ import { AppService } from './app.service';
     MembersModule,
     SupplementRequestsModule,
     DashboardModule,
+    FamiliesModule,
     GraphModule,
     KinshipModule,
+    InvitationsModule,
   ],
   controllers: [AppController],
   providers: [
@@ -65,6 +71,14 @@ import { AppService } from './app.service';
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: PlatformRolesGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TenantContextInterceptor,
     },
   ],
 })

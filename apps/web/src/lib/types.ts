@@ -1,5 +1,7 @@
 export type UserRole = 'ADMIN' | 'VIEWER';
+export type PlatformRole = 'SUPER' | 'USER';
 export type UserStatus = 'ACTIVE' | 'DISABLED';
+export type FamilyStatus = 'ACTIVE' | 'DISABLED';
 export type Gender = 'MALE' | 'FEMALE' | 'UNKNOWN';
 export type LifeStatus = 'ALIVE' | 'DECEASED' | 'UNKNOWN';
 export type MarriageStatus = 'ACTIVE' | 'DIVORCED' | 'WIDOWED';
@@ -19,10 +21,60 @@ export type MemberEventType =
 export interface AuthUser {
   id: string;
   username: string;
+  phone?: string | null;
+  displayName?: string | null;
+  platformRole: PlatformRole;
   role: UserRole;
+  familyRole?: UserRole | null;
+  activeFamilyId?: string | null;
+  currentFamily?: AuthFamily | null;
+  families: AuthFamily[];
   status: UserStatus;
   lastLoginAt: string | null;
   createdAt: string;
+}
+
+export interface AuthFamily {
+  id: string;
+  name: string;
+  status: FamilyStatus;
+  role: UserRole;
+}
+
+export interface PlatformFamilyRecord {
+  id: string;
+  name: string;
+  status: FamilyStatus;
+  createdAt: string;
+  updatedAt: string;
+  membershipCount: number;
+  memberCount: number;
+}
+
+export interface InvitationResult {
+  id: string;
+  code: string;
+  inviteUrl: string;
+  type: 'FAMILY_ADMIN' | 'FAMILY_MEMBER';
+  family: {
+    id: string;
+    name: string;
+  } | null;
+  expiresAt: string;
+}
+
+export interface InvitationInspectResult {
+  id: string;
+  type: 'FAMILY_ADMIN' | 'FAMILY_MEMBER';
+  targetRole: UserRole;
+  family: {
+    id: string;
+    name: string;
+    status: FamilyStatus;
+  } | null;
+  expiresAt: string;
+  usedAt: string | null;
+  available: boolean;
 }
 
 export interface DashboardSummary {
@@ -420,6 +472,7 @@ export interface ChangelogChangeItem {
 }
 
 export interface UserRecord extends AuthUser {
+  membershipStatus?: 'ACTIVE' | 'DISABLED';
   updatedAt?: string;
 }
 

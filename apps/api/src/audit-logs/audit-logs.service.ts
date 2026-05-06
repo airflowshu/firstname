@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { AuditAction, Prisma } from '@prisma/client';
+import { AuditAction, PlatformRole, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -54,6 +54,7 @@ export class AuditLogsService {
   }
 
   async log(params: {
+    familyId?: string | null;
     operatorId?: string;
     action: AuditAction;
     targetType: string;
@@ -62,8 +63,20 @@ export class AuditLogsService {
     after?: unknown;
     metadata?: unknown;
   }) {
+    if (params.operatorId) {
+      const operator = await this.prisma.user.findUnique({
+        where: { id: params.operatorId },
+        select: { platformRole: true },
+      });
+
+      if (operator?.platformRole === PlatformRole.SUPER) {
+        return null;
+      }
+    }
+
     return this.prisma.auditLog.create({
       data: {
+        familyId: params.familyId ?? undefined,
         operatorId: params.operatorId,
         action: params.action,
         targetType: params.targetType,

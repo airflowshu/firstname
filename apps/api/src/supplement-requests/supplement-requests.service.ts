@@ -16,10 +16,11 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import { AuditLogsService } from '../audit-logs/audit-logs.service';
+import { validateMemberAssetFile } from '../common/utils/asset-file.util';
 import { buildFileChecksum, buildUploadUrl } from '../common/utils/family-tree.util';
 import type { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
+import { getTenantContext } from '../common/tenant/tenant-context';
 import { PrismaService } from '../prisma/prisma.service';
-import type { CreateMemberDto } from '../members/dto/member.dto';
 import { MembersService } from '../members/members.service';
 import {
   CreateSupplementAssetRequestDto,
@@ -145,7 +146,7 @@ export class SupplementRequestsService {
       ...patch,
       fatherId: member.fatherId ?? undefined,
       motherId: member.motherId ?? undefined,
-    } as Partial<CreateMemberDto>);
+    });
 
     const created = await this.prisma.supplementRequest.create({
       data: {
@@ -216,14 +217,16 @@ export class SupplementRequestsService {
         : SupplementRequestType.DOCUMENT;
     const normalizedAssetMetadata = this.normalizeAssetMetadata(dto);
 
+    const familyId = this.currentFamilyId();
     const created = await this.prisma.$transaction(async (tx) => {
       const request = await tx.supplementRequest.create({
         data: {
+          familyId,
           memberId: dto.memberId,
           requesterId: user.sub,
           requestType,
           reason: dto.reason,
-          patch: {} as Prisma.InputJsonValue,
+          patch: {},
         },
       });
 
@@ -237,6 +240,7 @@ export class SupplementRequestsService {
 
         await tx.supplementRequestAsset.create({
           data: {
+            familyId,
             requestId: request.id,
             category: dto.category,
             filePath: relativePath,
@@ -308,7 +312,7 @@ export class SupplementRequestsService {
         ...(request.patch as Record<string, unknown>),
         fatherId: request.member.fatherId ?? undefined,
         motherId: request.member.motherId ?? undefined,
-      } as Partial<CreateMemberDto>);
+      });
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -320,19 +324,16 @@ export class SupplementRequestsService {
             data: {
               ...patch,
               birthDate:
-                typeof patch.birthDate === 'string'
-                  ? new Date(patch.birthDate)
-                  : patch.birthDate,
+                typeof patch.birthDate === 'string' ? new Date(patch.birthDate) : patch.birthDate,
               deathDate:
-                typeof patch.deathDate === 'string'
-                  ? new Date(patch.deathDate)
-                  : patch.deathDate,
+                typeof patch.deathDate === 'string' ? new Date(patch.deathDate) : patch.deathDate,
             },
           });
         } else {
           for (const asset of request.assets) {
             await tx.memberAsset.create({
               data: {
+                familyId: request.familyId,
                 memberId: request.memberId,
                 uploadedById: request.requesterId,
                 category: asset.category,
@@ -424,34 +425,8 @@ export class SupplementRequestsService {
     };
   }
 
-  private validateSupplementAssetFile(
-    file: Express.Multer.File,
-    category: MemberAssetCategory,
-  ) {
-    if (category === MemberAssetCategory.PHOTO) {
-      if (!file.mimetype.startsWith('image/')) {
-        throw new BadRequestException(`文件 ${file.originalname} 不是合法的图片类型。`);
-      }
-
-      return;
-    }
-
-    const allowedDocumentMimeTypes = new Set([
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-powerpoint',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      'text/plain',
-      'application/zip',
-      'application/x-zip-compressed',
-    ]);
-
-    if (!allowedDocumentMimeTypes.has(file.mimetype)) {
-      throw new BadRequestException(`文件 ${file.originalname} 不是支持的附件类型。`);
-    }
+  private validateSupplementAssetFile(file: Express.Multer.File, category: MemberAssetCategory) {
+    validateMemberAssetFile(file, category);
   }
 
   private normalizeAssetMetadata(dto: CreateSupplementAssetRequestDto) {
@@ -482,13 +457,11 @@ export class SupplementRequestsService {
       return undefined;
     }
 
-    return Array.from(
-      new Set(
-        tags
-          .map((tag) => tag.trim())
-          .filter(Boolean),
-      ),
-    ).slice(0, 12);
+    return Array.from(new Set(tags.map((tag) => tag.trim()).filter(Boolean))).slice(0, 12);
+  }
+
+  private currentFamilyId() {
+    return getTenantContext()?.familyId ?? undefined;
   }
 
   private buildNormalizedPatch(
@@ -507,7 +480,8 @@ export class SupplementRequestsService {
   ) {
     const normalizedPatch: Record<string, unknown> = {};
 
-    const normalizeDate = (value: unknown) => (typeof value === 'string' && value ? value : undefined);
+    const normalizeDate = (value: unknown) =>
+      typeof value === 'string' && value ? value : undefined;
     const normalizeString = (value: unknown) =>
       typeof value === 'string' ? value.trim() || undefined : undefined;
     const normalizeNumber = (value: unknown) =>
@@ -525,8 +499,10 @@ export class SupplementRequestsService {
       notes: normalizeString(patch.notes),
     };
 
-    if (candidateValues.name && candidateValues.name !== member.name) normalizedPatch.name = candidateValues.name;
-    if (candidateValues.gender && candidateValues.gender !== member.gender) normalizedPatch.gender = candidateValues.gender;
+    if (candidateValues.name && candidateValues.name !== member.name)
+      normalizedPatch.name = candidateValues.name;
+    if (candidateValues.gender && candidateValues.gender !== member.gender)
+      normalizedPatch.gender = candidateValues.gender;
 
     const memberBirthDate = member.birthDate?.toISOString().slice(0, 10);
     const memberDeathDate = member.deathDate?.toISOString().slice(0, 10);

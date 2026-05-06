@@ -13,8 +13,9 @@ export class DashboardService {
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
-  async getSummary() {
-    const cached = await this.cacheManager.get(DASHBOARD_SUMMARY_CACHE_KEY);
+  async getSummary(familyId?: string | null) {
+    const cacheKey = `${DASHBOARD_SUMMARY_CACHE_KEY}:${familyId ?? 'platform'}`;
+    const cached = await this.cacheManager.get(cacheKey);
 
     if (cached) {
       return cached;
@@ -100,7 +101,7 @@ export class DashboardService {
       recentLogs,
     };
 
-    await this.cacheManager.set(DASHBOARD_SUMMARY_CACHE_KEY, summary, 60_000);
+    await this.cacheManager.set(cacheKey, summary, 60_000);
 
     return summary;
   }

@@ -22,6 +22,9 @@ import type {
   MemberKinshipResponse,
   MemberOption,
   MembersResponse,
+  InvitationInspectResult,
+  InvitationResult,
+  PlatformFamilyRecord,
   UserRecord,
 } from './types';
 
@@ -51,7 +54,40 @@ export function setRuntimeAccessToken(token: string | null) {
 }
 
 function getApiBaseUrl() {
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+  const configuredUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+
+  if (typeof window === 'undefined') {
+    return configuredUrl || 'http://localhost:3001';
+  }
+
+  const currentUrl = new URL(window.location.href);
+  const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(currentUrl.hostname);
+
+  if (configuredUrl) {
+    try {
+      const apiUrl = new URL(configuredUrl);
+      const configuredPointsToCurrentFrontend =
+        apiUrl.hostname === currentUrl.hostname && apiUrl.port === currentUrl.port;
+      const configuredLocalhostFromRemotePage =
+        ['localhost', '127.0.0.1', '::1'].includes(apiUrl.hostname) && !isLocalHost;
+
+      if (configuredPointsToCurrentFrontend || configuredLocalhostFromRemotePage) {
+        apiUrl.hostname = currentUrl.hostname;
+        apiUrl.port = '3001';
+        return apiUrl.origin;
+      }
+
+      return apiUrl.origin;
+    } catch {
+      return configuredUrl;
+    }
+  }
+
+  if (!isLocalHost) {
+    return `${currentUrl.protocol}//${currentUrl.hostname}:3001`;
+  }
+
+  return 'http://localhost:3001';
 }
 
 function clearStoredAuth() {
@@ -151,15 +187,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(
-    `${getApiBaseUrl()}${path}`,
-    {
-      ...options,
-      headers,
-      cache: 'no-store',
-      credentials: 'include',
-    },
-  );
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    ...options,
+    headers,
+    cache: 'no-store',
+    credentials: 'include',
+  });
 
   if (response.status === 401 && shouldTryRefresh(path, options)) {
     const refreshedToken = await refreshAccessToken();
@@ -219,6 +252,55 @@ export const api = {
     }
   },
   me: (token?: string | null) => request<AuthUser>('/auth/me', { token }),
+  changePassword: (payload: { currentPassword: string; newPassword: string }) =>
+    request<{ success: boolean }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      skipAuthRefresh: true,
+    }),
+  switchFamily: async (familyId: string) => {
+    const result = await request<{ accessToken: string; user: AuthUser }>('/auth/switch-family', {
+      method: 'POST',
+      body: JSON.stringify({ familyId }),
+    });
+    setRuntimeAccessToken(result.accessToken);
+    return result;
+  },
+  inspectInvitation: (code: string) =>
+    request<InvitationInspectResult>(`/invitations/${encodeURIComponent(code)}`, {
+      skipAuthRefresh: true,
+    }),
+  acceptInvitation: (
+    code: string,
+    payload: {
+      phone: string;
+      username: string;
+      password: string;
+      displayName?: string;
+      familyName?: string;
+    },
+  ) =>
+    request<{
+      success: boolean;
+      userId: string;
+      family: { id: string; name: string };
+      role: string;
+    }>(`/invitations/${encodeURIComponent(code)}/accept`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      skipAuthRefresh: true,
+    }),
+  createFamilyAdminInvitation: (payload?: { expiresInDays?: number }) =>
+    request<InvitationResult>('/platform/invitations/family-admin', {
+      method: 'POST',
+      body: JSON.stringify(payload ?? {}),
+    }),
+  createFamilyMemberInvitation: (payload?: { expiresInHours?: number }) =>
+    request<InvitationResult>('/families/current/invitations/members', {
+      method: 'POST',
+      body: JSON.stringify(payload ?? {}),
+    }),
+  getPlatformFamilies: () => request<PlatformFamilyRecord[]>('/platform/families'),
   getDashboardSummary: () => request<DashboardSummary>('/dashboard/summary'),
   getMembers: (params: Record<string, string | number | boolean | undefined>) => {
     const search = new URLSearchParams();
@@ -296,10 +378,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
-  updateAssetTag: (
-    id: string,
-    payload: { name: string; enabled?: boolean; sortOrder?: number },
-  ) =>
+  updateAssetTag: (id: string, payload: { name: string; enabled?: boolean; sortOrder?: number }) =>
     request<AssetTagRecord>(`/assets/tags/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
@@ -335,18 +414,16 @@ export const api = {
     request<{ success: boolean }>(`/assets/sources/${id}`, {
       method: 'DELETE',
     }),
-  importAssetsBatch: (
-    payload: {
-      memberId: string;
-      category: 'PHOTO' | 'DOCUMENT';
-      files: File[];
-      sourceType?: string;
-      source?: string;
-      tags?: string[];
-      description?: string;
-      titles?: string[];
-    },
-  ) => {
+  importAssetsBatch: (payload: {
+    memberId: string;
+    category: 'PHOTO' | 'DOCUMENT';
+    files: File[];
+    sourceType?: string;
+    source?: string;
+    tags?: string[];
+    description?: string;
+    titles?: string[];
+  }) => {
     const formData = new FormData();
     formData.append('memberId', payload.memberId);
     formData.append('category', payload.category);
@@ -374,18 +451,16 @@ export const api = {
       body: formData,
     });
   },
-  importAssetsPrecheck: (
-    payload: {
-      memberId: string;
-      category: 'PHOTO' | 'DOCUMENT';
-      files: File[];
-      sourceType?: string;
-      source?: string;
-      tags?: string[];
-      description?: string;
-      titles?: string[];
-    },
-  ) => {
+  importAssetsPrecheck: (payload: {
+    memberId: string;
+    category: 'PHOTO' | 'DOCUMENT';
+    files: File[];
+    sourceType?: string;
+    source?: string;
+    tags?: string[];
+    description?: string;
+    titles?: string[];
+  }) => {
     const formData = new FormData();
     formData.append('memberId', payload.memberId);
     formData.append('category', payload.category);
@@ -449,6 +524,7 @@ export const api = {
     memberId: string,
     payload: {
       relationType: 'father' | 'mother' | 'spouse' | 'child' | 'sibling';
+      existingMemberId?: string;
       member: Record<string, unknown>;
     },
   ) =>

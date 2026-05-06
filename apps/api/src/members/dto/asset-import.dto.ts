@@ -18,9 +18,7 @@ function transformStringArray(value: unknown) {
   }
 
   if (Array.isArray(value)) {
-    return value
-      .map((item) => String(item).trim())
-      .filter(Boolean);
+    return value.map((item) => String(item).trim()).filter(Boolean);
   }
 
   if (typeof value === 'string') {
@@ -32,9 +30,7 @@ function transformStringArray(value: unknown) {
     try {
       const parsed = JSON.parse(trimmed) as unknown;
       if (Array.isArray(parsed)) {
-        return parsed
-          .map((item) => String(item).trim())
-          .filter(Boolean);
+        return parsed.map((item) => String(item).trim()).filter(Boolean);
       }
     } catch {
       return [trimmed];
@@ -44,10 +40,15 @@ function transformStringArray(value: unknown) {
   return undefined;
 }
 
+function transformAssetCategory(value: unknown) {
+  return typeof value === 'string' ? value.trim().toUpperCase() : value;
+}
+
 export class ImportAssetBatchDto extends MemberAssetMetadataDto {
   @IsString()
   memberId!: string;
 
+  @Transform(({ value }) => transformAssetCategory(value))
   @IsEnum(MemberAssetCategory)
   category!: MemberAssetCategory;
 

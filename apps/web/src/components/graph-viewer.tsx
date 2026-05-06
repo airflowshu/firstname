@@ -18,6 +18,37 @@ function formatEdgeLabel(edge: GraphData['edges'][number]) {
   return edge.label;
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function formatGender(gender: GraphData['nodes'][number]['gender']) {
+  return gender === 'MALE' ? '男' : gender === 'FEMALE' ? '女' : '未知';
+}
+
+function formatLifeStatus(status: GraphData['nodes'][number]['lifeStatus']) {
+  return status === 'ALIVE' ? '在世' : status === 'DECEASED' ? '已故' : '未知';
+}
+
+function getNodeSize(node: GraphData['nodes'][number], highlighted: boolean) {
+  const nameLength = Array.from(node.label).length;
+
+  if (node.isCenter) {
+    return Math.max(76, nameLength >= 4 ? 84 : 76);
+  }
+
+  if (highlighted) {
+    return Math.max(64, nameLength >= 4 ? 72 : 64);
+  }
+
+  return Math.max(56, nameLength >= 4 ? 68 : nameLength >= 3 ? 62 : 56);
+}
+
 export interface GraphViewerHandle {
   fitView: () => void;
 }
@@ -88,9 +119,17 @@ export const GraphViewer = forwardRef<
 
               return {
                 id: node.id,
+                data: {
+                  label: node.label,
+                  gender: node.gender,
+                  lifeStatus: node.lifeStatus,
+                  generationName: node.generationName,
+                  isCenter: node.isCenter,
+                  isTarget: isTargetNode,
+                },
                 style: {
                   labelText: node.label,
-                  size: node.isCenter ? 72 : 52,
+                  size: getNodeSize(node, isSpecialNode),
                   fill: isDeceased
                     ? node.isCenter
                       ? '#6f6f6f'
@@ -105,15 +144,15 @@ export const GraphViewer = forwardRef<
                   stroke: isPathNode ? '#fbbf24' : isDeceased ? '#e3ddd3' : '#f3e6d0',
                   lineWidth: node.isCenter ? 4 : isSpecialNode ? 4 : 2,
                   labelFill: '#fffaf0',
-                  labelFontSize: node.isCenter ? 16 : isSpecialNode ? 14 : 13,
+                  labelFontSize: node.isCenter ? 16 : isSpecialNode ? 13 : 13,
                   labelFontWeight: 700,
                   labelLineWidth: isSpecialNode ? 5 : 4,
                   labelStroke: 'rgba(48, 32, 18, 0.38)',
                   labelPlacement: 'center',
                   labelOffsetX: 0,
                   labelOffsetY: 0,
-                  labelMaxWidth: '78%',
-                  labelWordWrap: true,
+                  labelMaxWidth: '92%',
+                  labelWordWrap: false,
                   labelTextAlign: 'center',
                   labelTextBaseline: 'middle',
                 },
@@ -158,8 +197,46 @@ export const GraphViewer = forwardRef<
           layout: {
             type: 'force',
             preventOverlap: true,
-            linkDistance: 150,
+            linkDistance: 165,
           },
+          plugins: [
+            {
+              type: 'tooltip',
+              trigger: 'hover',
+              enable: (_event: unknown, items: Array<{ data?: Record<string, unknown> }>) =>
+                Boolean(items[0]?.data?.label),
+              getContent: async (_event: unknown, items: Array<{ data?: Record<string, unknown> }>) => {
+                const item = items[0]?.data;
+                if (!item) {
+                  return '';
+                }
+
+                const label = String(item.label ?? '');
+                const gender = item.gender as GraphData['nodes'][number]['gender'];
+                const lifeStatus = item.lifeStatus as GraphData['nodes'][number]['lifeStatus'];
+                const generationName = item.generationName ? String(item.generationName) : '未填写';
+                const roleTags = [
+                  item.isCenter ? '中心人物' : null,
+                  item.isTarget ? '路径目标' : null,
+                ].filter(Boolean);
+
+                return `
+                  <div class="graph-node-tooltip">
+                    <div class="graph-node-tooltip-name">${escapeHtml(label)}</div>
+                    <div class="graph-node-tooltip-meta">${escapeHtml(formatGender(gender))} · 生命状态：${escapeHtml(formatLifeStatus(lifeStatus))}</div>
+                    <div class="graph-node-tooltip-meta">代际：${escapeHtml(generationName)}</div>
+                    ${
+                      roleTags.length
+                        ? `<div class="graph-node-tooltip-tags">${roleTags
+                            .map((tag) => `<span>${escapeHtml(String(tag))}</span>`)
+                            .join('')}</div>`
+                        : ''
+                    }
+                  </div>
+                `;
+              },
+            },
+          ],
           behaviors: ['drag-canvas', 'zoom-canvas', 'drag-element'],
         } as never);
 

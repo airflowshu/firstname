@@ -58,19 +58,13 @@ export class AssetsController {
   }
 
   @Get('sources')
-  listAssetSources(
-    @Query() query: AssetSourceQueryDto,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
+  listAssetSources(@Query() query: AssetSourceQueryDto, @CurrentUser() user: AuthenticatedUser) {
     return this.membersService.listAssetSources(query, user);
   }
 
   @Roles(UserRole.ADMIN)
   @Post('sources')
-  createAssetSource(
-    @Body() dto: UpsertAssetSourceDto,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
+  createAssetSource(@Body() dto: UpsertAssetSourceDto, @CurrentUser() user: AuthenticatedUser) {
     return this.membersService.createAssetSource(dto, user.sub);
   }
 
@@ -92,10 +86,7 @@ export class AssetsController {
 
   @Roles(UserRole.ADMIN)
   @Post('batch')
-  batchOperateAssets(
-    @Body() dto: BatchAssetOperationDto,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
+  batchOperateAssets(@Body() dto: BatchAssetOperationDto, @CurrentUser() user: AuthenticatedUser) {
     return this.membersService.batchOperateAssets(dto, user.sub);
   }
 

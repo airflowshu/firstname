@@ -29,7 +29,9 @@ import {
   buildPhotoUrl,
   buildUploadUrl,
 } from '../common/utils/family-tree.util';
+import { validateMemberAssetFile } from '../common/utils/asset-file.util';
 import type { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
+import { getTenantContext } from '../common/tenant/tenant-context';
 import { DASHBOARD_SUMMARY_CACHE_KEY } from '../dashboard/dashboard.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BatchAssetOperationDto } from './dto/asset-batch.dto';
@@ -174,7 +176,9 @@ export class MembersService {
       orderBy: [{ name: 'asc' }, { birthDate: 'asc' }],
     });
 
-    const targetBirthDate = dto.birthDate ? new Date(dto.birthDate).toISOString().slice(0, 10) : null;
+    const targetBirthDate = dto.birthDate
+      ? new Date(dto.birthDate).toISOString().slice(0, 10)
+      : null;
     const targetGenerationName = dto.generationName?.trim();
     const targetNativePlace = dto.nativePlace?.trim();
 
@@ -530,6 +534,7 @@ export class MembersService {
   }
 
   async updateAssetTag(id: string, dto: UpsertAssetTagDto, operatorId: string) {
+    const familyId = this.currentFamilyId();
     const existing = await this.prisma.assetTag.findUnique({
       where: { id },
     });
@@ -572,6 +577,7 @@ export class MembersService {
       if (existing.name !== normalizedName) {
         const memberAssets = await tx.memberAsset.findMany({
           where: {
+            familyId,
             isDeleted: false,
             tags: {
               has: existing.name,
@@ -600,6 +606,7 @@ export class MembersService {
 
         const requestAssets = await tx.supplementRequestAsset.findMany({
           where: {
+            familyId,
             tags: {
               has: existing.name,
             },
@@ -752,6 +759,7 @@ export class MembersService {
   }
 
   async updateAssetSource(id: string, dto: UpsertAssetSourceDto, operatorId: string) {
+    const familyId = this.currentFamilyId();
     const existing = await this.prisma.assetSource.findUnique({
       where: { id },
     });
@@ -794,6 +802,7 @@ export class MembersService {
       if (existing.name !== normalizedName) {
         const memberAssets = await tx.memberAsset.findMany({
           where: {
+            familyId,
             isDeleted: false,
             sourceType: existing.name,
           },
@@ -813,6 +822,7 @@ export class MembersService {
 
         const requestAssets = await tx.supplementRequestAsset.findMany({
           where: {
+            familyId,
             sourceType: existing.name,
           },
           select: {
@@ -1116,9 +1126,7 @@ export class MembersService {
           code: 'INVALID_FILE_TYPE',
           severity: 'error',
           message:
-            error instanceof Error && error.message
-              ? error.message
-              : '文件类型不支持，无法导入。',
+            error instanceof Error && error.message ? error.message : '文件类型不支持，无法导入。',
         });
       }
 
@@ -1242,16 +1250,16 @@ export class MembersService {
         }
       }
 
-        return {
-          ...item,
-          issues,
-          status: issues.some((issue) => issue.severity === 'error')
-            ? 'error'
-            : issues.length > 0
-              ? 'warning'
-              : 'safe',
-        };
-      });
+      return {
+        ...item,
+        issues,
+        status: issues.some((issue) => issue.severity === 'error')
+          ? 'error'
+          : issues.length > 0
+            ? 'warning'
+            : 'safe',
+      };
+    });
 
     return {
       memberId: member.id,
@@ -1394,9 +1402,7 @@ export class MembersService {
           inputIndex: index,
           originalName: file.originalname,
           message:
-            error instanceof Error && error.message
-              ? error.message
-              : '文件导入失败，请稍后重试。',
+            error instanceof Error && error.message ? error.message : '文件导入失败，请稍后重试。',
         });
       }
     }
@@ -1423,14 +1429,14 @@ export class MembersService {
     });
 
     return {
-      auditLogId: auditLog.id,
+      auditLogId: auditLog?.id ?? '',
       memberId: member.id,
       memberName: member.name,
       category: dto.category,
       totalCount: files.length,
       successCount: createdAssets.length,
       failedCount: failures.length,
-      createdAt: auditLog.createdAt,
+      createdAt: auditLog?.createdAt ?? new Date(),
       createdAssets,
       failures,
     };
@@ -1840,6 +1846,152 @@ export class MembersService {
       throw new NotFoundException('未找到当前锚点成员，无法快速创建亲属。');
     }
 
+    const existingMemberId = dto.existingMemberId?.trim();
+    if (existingMemberId) {
+      if (!['father', 'mother', 'child'].includes(dto.relationType)) {
+        throw new BadRequestException('当前快速新增类型不支持绑定已有成员。');
+      }
+
+      if (existingMemberId === anchorId) {
+        throw new BadRequestException('不能将当前成员本人绑定为亲属。');
+      }
+
+      if (dto.relationType === 'child') {
+        if (anchorMember.gender === Gender.UNKNOWN) {
+          throw new BadRequestException('当前成员性别未知，暂无法快速新增子女。');
+        }
+
+        const existingChild = await this.prisma.member.findFirst({
+          where: {
+            id: existingMemberId,
+            isDeleted: false,
+          },
+        });
+
+        if (!existingChild) {
+          throw new NotFoundException('指定的子女成员不存在。');
+        }
+
+        if (
+          anchorMember.gender === Gender.MALE &&
+          existingChild.fatherId &&
+          existingChild.fatherId !== anchorId
+        ) {
+          throw new BadRequestException('该成员已绑定其他父亲，不能直接作为当前成员子女。');
+        }
+
+        if (
+          anchorMember.gender === Gender.FEMALE &&
+          existingChild.motherId &&
+          existingChild.motherId !== anchorId
+        ) {
+          throw new BadRequestException('该成员已绑定其他母亲，不能直接作为当前成员子女。');
+        }
+
+        const nextFatherId =
+          anchorMember.gender === Gender.MALE
+            ? anchorId
+            : (existingChild.fatherId ?? dto.member.fatherId ?? undefined);
+        const nextMotherId =
+          anchorMember.gender === Gender.FEMALE
+            ? anchorId
+            : (existingChild.motherId ?? dto.member.motherId ?? undefined);
+        const { father, mother } = await this.ensureParentReferences(
+          nextFatherId,
+          nextMotherId,
+          existingMemberId,
+        );
+        await this.validateMemberConsistency(
+          {
+            name: existingChild.name,
+            gender: existingChild.gender,
+            birthDate: existingChild.birthDate,
+            deathDate: existingChild.deathDate,
+            lifeStatus: existingChild.lifeStatus,
+            fatherId: nextFatherId,
+            motherId: nextMotherId,
+          },
+          {
+            currentId: existingMemberId,
+            father,
+            mother,
+          },
+        );
+
+        await this.prisma.member.update({
+          where: { id: existingMemberId },
+          data: {
+            fatherId: nextFatherId,
+            motherId: nextMotherId,
+          },
+        });
+
+        await this.invalidateDashboardCache();
+        await this.auditLogsService.log({
+          operatorId,
+          action: AuditAction.UPDATE,
+          targetType: 'MEMBER',
+          targetId: existingMemberId,
+          metadata: {
+            quickRelativeType: dto.relationType,
+            anchorId,
+            linkedExistingMember: true,
+          },
+        });
+
+        return this.getById(existingMemberId);
+      }
+
+      const nextFatherId =
+        dto.relationType === 'father' ? existingMemberId : (anchorMember.fatherId ?? undefined);
+      const nextMotherId =
+        dto.relationType === 'mother' ? existingMemberId : (anchorMember.motherId ?? undefined);
+      const { father, mother } = await this.ensureParentReferences(
+        nextFatherId,
+        nextMotherId,
+        anchorId,
+      );
+      await this.validateMemberConsistency(
+        {
+          name: anchorMember.name,
+          gender: anchorMember.gender,
+          birthDate: anchorMember.birthDate,
+          deathDate: anchorMember.deathDate,
+          lifeStatus: anchorMember.lifeStatus,
+          fatherId: nextFatherId,
+          motherId: nextMotherId,
+        },
+        {
+          currentId: anchorId,
+          father,
+          mother,
+        },
+      );
+
+      await this.prisma.member.update({
+        where: { id: anchorId },
+        data:
+          dto.relationType === 'father'
+            ? { fatherId: existingMemberId }
+            : { motherId: existingMemberId },
+      });
+
+      await this.invalidateDashboardCache();
+      await this.auditLogsService.log({
+        operatorId,
+        action: AuditAction.UPDATE,
+        targetType: 'MEMBER',
+        targetId: anchorId,
+        metadata: {
+          quickRelativeType: dto.relationType,
+          linkedMemberId: existingMemberId,
+          linkedExistingMember: true,
+        },
+      });
+
+      return this.getById(existingMemberId);
+    }
+
     const activeSpouses = await this.prisma.marriage.findMany({
       where: {
         isDeleted: false,
@@ -1894,7 +2046,11 @@ export class MembersService {
         preparedMemberData.motherId = onlyActiveSpouse.id;
       }
 
-      if (anchorMember.gender === Gender.FEMALE && !preparedMemberData.fatherId && onlyActiveSpouse) {
+      if (
+        anchorMember.gender === Gender.FEMALE &&
+        !preparedMemberData.fatherId &&
+        onlyActiveSpouse
+      ) {
         preparedMemberData.fatherId = onlyActiveSpouse.id;
       }
     }
@@ -1912,9 +2068,11 @@ export class MembersService {
       mother,
     });
 
+    const familyId = this.currentFamilyId();
     const createdRelative = await this.prisma.$transaction(async (tx) => {
       const created = await tx.member.create({
         data: {
+          familyId,
           name: preparedMemberData.name,
           gender: preparedMemberData.gender,
           birthDate: preparedMemberData.birthDate
@@ -1950,6 +2108,7 @@ export class MembersService {
       if (dto.relationType === 'spouse') {
         await tx.marriage.create({
           data: {
+            familyId,
             pairKey: buildPairKey(anchorId, created.id),
             memberId: anchorId,
             spouseId: created.id,
@@ -2086,7 +2245,11 @@ export class MembersService {
 
     const nextFatherId = patch.fatherId ?? existingMember.fatherId ?? undefined;
     const nextMotherId = patch.motherId ?? existingMember.motherId ?? undefined;
-    const { father, mother } = await this.ensureParentReferences(nextFatherId, nextMotherId, memberId);
+    const { father, mother } = await this.ensureParentReferences(
+      nextFatherId,
+      nextMotherId,
+      memberId,
+    );
 
     await this.validateMemberConsistency(
       {
@@ -2237,9 +2400,7 @@ export class MembersService {
 
     const uploadRoot = resolve(process.cwd(), process.env.UPLOAD_DIR ?? 'uploads');
     const directoryName =
-      category === MemberAssetCategory.PHOTO
-        ? 'member-assets/photos'
-        : 'member-assets/documents';
+      category === MemberAssetCategory.PHOTO ? 'member-assets/photos' : 'member-assets/documents';
     const saveDirectory = resolve(uploadRoot, directoryName);
     await mkdir(saveDirectory, { recursive: true });
     const normalizedAssetMetadata = this.normalizeAssetMetadata(metadata);
@@ -2874,7 +3035,9 @@ export class MembersService {
       }
 
       if (rowCodeSet.has(code)) {
-        throw new BadRequestException(`第 ${rowNumber} 行编号 ${code} 重复，请保持文件内编号唯一。`);
+        throw new BadRequestException(
+          `第 ${rowNumber} 行编号 ${code} 重复，请保持文件内编号唯一。`,
+        );
       }
       rowCodeSet.add(code);
 
@@ -2923,9 +3086,7 @@ export class MembersService {
       }
 
       if (row.fatherCode && row.motherCode && row.fatherCode === row.motherCode) {
-        throw new BadRequestException(
-          `第 ${row.rowNumber} 行父亲编号与母亲编号不能相同。`,
-        );
+        throw new BadRequestException(`第 ${row.rowNumber} 行父亲编号与母亲编号不能相同。`);
       }
 
       await this.validateMemberConsistency(
@@ -2951,12 +3112,14 @@ export class MembersService {
 
     this.assertNoImportCycles(rows);
 
+    const familyId = this.currentFamilyId();
     const createdCount = await this.prisma.$transaction(async (tx) => {
       const createdMap = new Map<string, { id: string; row: ImportRow }>();
 
       for (const row of rows) {
         const created = await tx.member.create({
           data: {
+            familyId,
             name: row.name,
             gender: row.gender,
             birthDate: row.birthDate ? new Date(row.birthDate) : undefined,
@@ -3000,14 +3163,18 @@ export class MembersService {
               ? ({
                   id: fatherRecord.id,
                   gender: fatherRecord.row.gender,
-                  birthDate: fatherRecord.row.birthDate ? new Date(fatherRecord.row.birthDate) : null,
+                  birthDate: fatherRecord.row.birthDate
+                    ? new Date(fatherRecord.row.birthDate)
+                    : null,
                 } as Member)
               : null,
             mother: motherRecord
               ? ({
                   id: motherRecord.id,
                   gender: motherRecord.row.gender,
-                  birthDate: motherRecord.row.birthDate ? new Date(motherRecord.row.birthDate) : null,
+                  birthDate: motherRecord.row.birthDate
+                    ? new Date(motherRecord.row.birthDate)
+                    : null,
                 } as Member)
               : null,
           },
@@ -3078,7 +3245,7 @@ export class MembersService {
   }
 
   private async validateMemberConsistency(
-    dto: Partial<CreateMemberDto> & {
+    dto: Omit<Partial<CreateMemberDto>, 'birthDate' | 'deathDate'> & {
       fatherId?: string | null;
       motherId?: string | null;
       birthDate?: string | Date | null;
@@ -3111,11 +3278,19 @@ export class MembersService {
       errors.push('母亲关系不能选择男性成员。');
     }
 
-    if (birthDate && options.father?.birthDate && birthDate.getTime() <= options.father.birthDate.getTime()) {
+    if (
+      birthDate &&
+      options.father?.birthDate &&
+      birthDate.getTime() <= options.father.birthDate.getTime()
+    ) {
       errors.push('成员出生日期必须晚于父亲的出生日期。');
     }
 
-    if (birthDate && options.mother?.birthDate && birthDate.getTime() <= options.mother.birthDate.getTime()) {
+    if (
+      birthDate &&
+      options.mother?.birthDate &&
+      birthDate.getTime() <= options.mother.birthDate.getTime()
+    ) {
       errors.push('成员出生日期必须晚于母亲的出生日期。');
     }
 
@@ -3154,7 +3329,19 @@ export class MembersService {
       return '';
     }
 
-    return String(value).trim();
+    if (typeof value === 'string') {
+      return value.trim();
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+      return value.toString().trim();
+    }
+
+    if (typeof value === 'object') {
+      return JSON.stringify(value).trim();
+    }
+
+    return '';
   }
 
   private parseGenderInput(value: string) {
@@ -3385,40 +3572,11 @@ export class MembersService {
       return undefined;
     }
 
-    return Array.from(
-      new Set(
-        tags
-          .map((tag) => tag.trim())
-          .filter(Boolean),
-      ),
-    ).slice(0, 12);
+    return Array.from(new Set(tags.map((tag) => tag.trim()).filter(Boolean))).slice(0, 12);
   }
 
   private validateAssetFile(file: Express.Multer.File, category: MemberAssetCategory) {
-    if (category === MemberAssetCategory.PHOTO) {
-      if (!file.mimetype.startsWith('image/')) {
-        throw new BadRequestException(`文件 ${file.originalname} 不是合法的图片类型。`);
-      }
-
-      return;
-    }
-
-    const allowedDocumentMimeTypes = new Set([
-      'application/pdf',
-      'application/msword',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.ms-powerpoint',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      'text/plain',
-      'application/zip',
-      'application/x-zip-compressed',
-    ]);
-
-    if (!allowedDocumentMimeTypes.has(file.mimetype)) {
-      throw new BadRequestException(`文件 ${file.originalname} 不是支持的附件类型。`);
-    }
+    validateMemberAssetFile(file, category);
   }
 
   private assertNoImportCycles(
@@ -3510,5 +3668,9 @@ export class MembersService {
 
   private async invalidateDashboardCache() {
     await this.cacheManager.del(DASHBOARD_SUMMARY_CACHE_KEY);
+  }
+
+  private currentFamilyId() {
+    return getTenantContext()?.familyId ?? undefined;
   }
 }

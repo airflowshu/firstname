@@ -30,6 +30,7 @@ export function MarriageFormModal({
   onSubmit: (values: Record<string, unknown>) => Promise<void> | void;
 }) {
   const [form] = Form.useForm();
+  const marriageStatus = Form.useWatch('status', form) as string | undefined;
 
   useEffect(() => {
     if (!open) {
@@ -43,6 +44,16 @@ export function MarriageFormModal({
       endDate: initialValue?.endDate ? dayjs(String(initialValue.endDate)) : undefined,
     });
   }, [form, initialValue, open]);
+
+  useEffect(() => {
+    if (!open || marriageStatus !== 'ACTIVE') {
+      return;
+    }
+
+    if (form.getFieldValue('endDate')) {
+      form.setFieldValue('endDate', undefined);
+    }
+  }, [form, marriageStatus, open]);
 
   return (
     <Modal
@@ -60,7 +71,12 @@ export function MarriageFormModal({
           await onSubmit({
             ...values,
             startDate: values.startDate ? values.startDate.format('YYYY-MM-DD') : undefined,
-            endDate: values.endDate ? values.endDate.format('YYYY-MM-DD') : undefined,
+            endDate:
+              values.status === 'ACTIVE'
+                ? undefined
+                : values.endDate
+                  ? values.endDate.format('YYYY-MM-DD')
+                  : undefined,
           });
         }}
       >
@@ -95,7 +111,11 @@ export function MarriageFormModal({
           <DatePicker style={{ width: '100%' }} />
         </Form.Item>
         <Form.Item name="endDate" label="结束日期">
-          <DatePicker style={{ width: '100%' }} />
+          <DatePicker
+            style={{ width: '100%' }}
+            disabled={marriageStatus === 'ACTIVE'}
+            placeholder={marriageStatus === 'ACTIVE' ? '婚姻存续时无需填写结束日期' : '请选择结束日期'}
+          />
         </Form.Item>
       </Form>
     </Modal>

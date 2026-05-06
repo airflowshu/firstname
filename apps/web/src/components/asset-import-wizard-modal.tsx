@@ -54,6 +54,17 @@ function stripExtension(filename: string) {
   return filename.replace(/\.[^.]+$/, '').trim() || filename.trim();
 }
 
+function isLikelyImageFile(file: UploadFile) {
+  const mimeType = file.type ?? '';
+  const extension = file.name.toLowerCase().match(/\.[^.]+$/)?.[0] ?? '';
+  return (
+    mimeType.startsWith('image/') ||
+    ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tif', '.tiff', '.heic', '.heif'].includes(
+      extension,
+    )
+  );
+}
+
 function buildResolvedTitle(
   mode: ImportTitleMode,
   fileName: string,
@@ -115,14 +126,16 @@ export function AssetImportWizardModal({
     queryKey: ['asset-sources', 'enabled'],
     queryFn: () => api.getAssetSources(),
   });
-  const category = Form.useWatch('category', form) as 'PHOTO' | 'DOCUMENT' | undefined;
-  const memberId = Form.useWatch('memberId', form) as string | undefined;
-  const sourceType = Form.useWatch('sourceType', form) as string | undefined;
-  const source = Form.useWatch('source', form) as string | undefined;
-  const tags = Form.useWatch('tags', form) as string[] | undefined;
-  const description = Form.useWatch('description', form) as string | undefined;
-  const titleMode = (Form.useWatch('titleMode', form) as ImportTitleMode | undefined) ?? 'ORIGINAL_NAME';
-  const titlePrefix = Form.useWatch('titlePrefix', form) as string | undefined;
+  const watchOptions = useMemo(() => ({ form, preserve: true }), [form]);
+  const category = Form.useWatch('category', watchOptions) as 'PHOTO' | 'DOCUMENT' | undefined;
+  const memberId = Form.useWatch('memberId', watchOptions) as string | undefined;
+  const sourceType = Form.useWatch('sourceType', watchOptions) as string | undefined;
+  const source = Form.useWatch('source', watchOptions) as string | undefined;
+  const tags = Form.useWatch('tags', watchOptions) as string[] | undefined;
+  const description = Form.useWatch('description', watchOptions) as string | undefined;
+  const titleMode =
+    (Form.useWatch('titleMode', watchOptions) as ImportTitleMode | undefined) ?? 'ORIGINAL_NAME';
+  const titlePrefix = Form.useWatch('titlePrefix', watchOptions) as string | undefined;
   const precheckMutation = useQuery({
     queryKey: [
       'asset-import-precheck',
@@ -301,27 +314,42 @@ export function AssetImportWizardModal({
                   return;
                 }
 
-                const values = await form.validateFields();
+                await form.validateFields(['memberId', 'category', 'titleMode', 'titlePrefix']);
+                const values = form.getFieldsValue(true) as {
+                  memberId?: string;
+                  category?: 'PHOTO' | 'DOCUMENT';
+                  sourceType?: string;
+                  source?: string;
+                  tags?: string[];
+                  description?: string;
+                  titleMode?: ImportTitleMode;
+                  titlePrefix?: string;
+                };
                 const files = fileList
                   .map((item) => item.originFileObj)
                   .filter(Boolean) as File[];
 
-                if (files.length === 0) {
+                if (!values.memberId || !values.category || !values.titleMode || files.length === 0) {
                   return;
                 }
 
+                const memberIdValue = values.memberId;
+                const categoryValue = values.category;
+                const titleModeValue = values.titleMode;
+                const titlePrefixValue = values.titlePrefix?.trim() || undefined;
+
                 await onSubmit({
-                  memberId: values.memberId,
-                  category: values.category,
+                  memberId: memberIdValue,
+                  category: categoryValue,
                   files,
                   sourceType: values.sourceType || undefined,
                   source: values.source?.trim() || undefined,
                   tags: normalizeTags(values.tags),
                   description: values.description?.trim() || undefined,
-                  titleMode: values.titleMode,
-                  titlePrefix: values.titlePrefix?.trim() || undefined,
+                  titleMode: titleModeValue,
+                  titlePrefix: titlePrefixValue,
                   resolvedTitles: files.map((file, index) =>
-                    buildResolvedTitle(values.titleMode, file.name, index, values.titlePrefix),
+                    buildResolvedTitle(titleModeValue, file.name, index, titlePrefixValue),
                   ),
                 });
 
@@ -403,7 +431,14 @@ export function AssetImportWizardModal({
                 beforeUpload={() => false}
                 fileList={fileList}
                 maxCount={12}
-                onChange={({ fileList: nextFileList }) => setFileList(nextFileList.slice(0, 12))}
+                onChange={({ fileList: nextFileList }) => {
+                  const limitedFileList = nextFileList.slice(0, 12);
+                  setFileList(limitedFileList);
+
+                  if (category !== 'DOCUMENT' && limitedFileList.some((file) => !isLikelyImageFile(file))) {
+                    form.setFieldsValue({ category: 'DOCUMENT' });
+                  }
+                }}
                 accept={
                   category === 'PHOTO'
                     ? 'image/*'

@@ -1,9 +1,9 @@
 'use client';
 
-import { PlusOutlined } from '@ant-design/icons';
+import { LinkOutlined, PlusOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { App, Button, Card, Form, Input, Modal, Select, Space, Table, Typography } from 'antd';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AuthGuard } from '@/components/auth-guard';
 import { api, ApiError } from '@/lib/api';
 import { formatDate } from '@/lib/format';
@@ -22,6 +22,10 @@ export default function UsersPage() {
     queryKey: ['users'],
     queryFn: api.getUsers,
   });
+  const visibleUsers = useMemo(
+    () => (usersQuery.data ?? []).filter((user) => user.platformRole !== 'SUPER'),
+    [usersQuery.data],
+  );
 
   const saveMutation = useMutation({
     mutationFn: async (payload: Record<string, unknown>) => {
@@ -40,6 +44,21 @@ export default function UsersPage() {
     },
     onError: (error) => {
       message.error(error instanceof ApiError ? error.message : '保存用户失败');
+    },
+  });
+
+  const inviteMutation = useMutation({
+    mutationFn: () => api.createFamilyMemberInvitation(),
+    onSuccess: async (result) => {
+      try {
+        await navigator.clipboard.writeText(result.inviteUrl);
+        message.success('邀请链接已复制，可直接转发给家族成员');
+      } catch {
+        message.success(`邀请链接已生成：${result.inviteUrl}`);
+      }
+    },
+    onError: (error) => {
+      message.error(error instanceof ApiError ? error.message : '创建邀请失败');
     },
   });
 
@@ -71,23 +90,32 @@ export default function UsersPage() {
         <Card
           className="soft-panel"
           extra={
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setEditingUser(undefined);
-                form.resetFields();
-                setOpen(true);
-              }}
-            >
-              新建账号
-            </Button>
+            <Space wrap>
+              <Button
+                icon={<LinkOutlined />}
+                loading={inviteMutation.isPending}
+                onClick={() => inviteMutation.mutate()}
+              >
+                复制邀请链接
+              </Button>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setEditingUser(undefined);
+                  form.resetFields();
+                  setOpen(true);
+                }}
+              >
+                新建账号
+              </Button>
+            </Space>
           }
         >
           <Table
             rowKey="id"
             loading={usersQuery.isLoading}
-            dataSource={usersQuery.data ?? []}
+            dataSource={visibleUsers}
             columns={[
               { title: '用户名', dataIndex: 'username' },
               {
@@ -112,17 +140,20 @@ export default function UsersPage() {
               },
               {
                 title: '操作',
-                render: (_: unknown, record: UserRecord) => (
-                  <Button
-                    size="small"
-                    onClick={() => {
-                      setEditingUser(record);
-                      setOpen(true);
-                    }}
-                  >
-                    编辑
-                  </Button>
-                ),
+                render: (_: unknown, record: UserRecord) =>
+                  record.platformRole === 'SUPER' ? (
+                    <Text type="secondary">不可操作</Text>
+                  ) : (
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        setEditingUser(record);
+                        setOpen(true);
+                      }}
+                    >
+                      编辑
+                    </Button>
+                  ),
               },
             ]}
           />
@@ -145,7 +176,7 @@ export default function UsersPage() {
               name="username"
               rules={[{ required: true, message: '请输入用户名' }]}
             >
-              <Input />
+              <Input disabled={Boolean(editingUser)} />
             </Form.Item>
             <Form.Item
               label={editingUser ? '重置密码（留空则不修改）' : '密码'}

@@ -12,9 +12,29 @@ enum UserRole {
   VIEWER
 }
 
+enum PlatformRole {
+  SUPER
+  USER
+}
+
 enum UserStatus {
   ACTIVE
   DISABLED
+}
+
+enum FamilyStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum MembershipStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum InvitationType {
+  FAMILY_ADMIN
+  FAMILY_MEMBER
 }
 
 enum Gender {
@@ -50,15 +70,24 @@ enum AuditAction {
 model User {
   id                          String              @id @default(cuid())
   username                    String              @unique
+  phone                       String?             @unique
+  displayName                 String?
   passwordHash                String
   tokenVersion                Int                 @default(0)
   refreshTokenHash            String?
   refreshTokenExpiresAt       DateTime?
+  platformRole                PlatformRole        @default(USER)
   role                        UserRole            @default(VIEWER)
   status                      UserStatus          @default(ACTIVE)
+  lastActiveFamilyId          String?
   lastLoginAt                 DateTime?
   createdAt                   DateTime            @default(now())
   updatedAt                   DateTime            @updatedAt
+  lastActiveFamily            Family?             @relation("LastActiveFamily", fields: [lastActiveFamilyId], references: [id], onDelete: SetNull)
+  createdFamilies             Family[]            @relation("FamilyCreator")
+  memberships                 FamilyMembership[]
+  createdInvitations          Invitation[]        @relation("InvitationCreator")
+  usedInvitations             Invitation[]        @relation("InvitationUser")
   auditLogs                   AuditLog[]
   submittedSupplementRequests SupplementRequest[] @relation("SupplementRequester")
   reviewedSupplementRequests  SupplementRequest[] @relation("SupplementReviewer")
@@ -66,10 +95,76 @@ model User {
   createdMemberEvents         MemberEvent[]
 
   @@index([refreshTokenHash])
+  @@index([lastActiveFamilyId])
+}
+
+model Family {
+  id                 String                   @id @default(cuid())
+  name               String
+  status             FamilyStatus             @default(ACTIVE)
+  createdById        String?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  createdBy          User?                    @relation("FamilyCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  activeUsers        User[]                   @relation("LastActiveFamily")
+  memberships        FamilyMembership[]
+  invitations        Invitation[]
+  members            Member[]
+  marriages          Marriage[]
+  assetTags          AssetTag[]
+  assetSources       AssetSource[]
+  memberEvents       MemberEvent[]
+  memberAssets       MemberAsset[]
+  supplementRequests SupplementRequest[]
+  requestAssets      SupplementRequestAsset[]
+  kinshipAliases     KinshipAlias[]
+  auditLogs          AuditLog[]
+
+  @@index([status])
+  @@index([createdById])
+}
+
+model FamilyMembership {
+  id        String           @id @default(cuid())
+  familyId  String
+  userId    String
+  role      UserRole         @default(VIEWER)
+  status    MembershipStatus @default(ACTIVE)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  family    Family           @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, familyId])
+  @@index([familyId, role])
+  @@index([userId, status])
+}
+
+model Invitation {
+  id          String         @id @default(cuid())
+  codeHash    String         @unique
+  type        InvitationType
+  familyId    String?
+  targetRole  UserRole       @default(VIEWER)
+  createdById String?
+  usedById    String?
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  family      Family?        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdBy   User?          @relation("InvitationCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  usedBy      User?          @relation("InvitationUser", fields: [usedById], references: [id], onDelete: SetNull)
+
+  @@index([familyId])
+  @@index([createdById])
+  @@index([usedById])
+  @@index([expiresAt])
 }
 
 model Member {
   id                 String              @id @default(cuid())
+  familyId           String?
   name               String
   gender             Gender              @default(UNKNOWN)
   birthDate          DateTime?
@@ -87,6 +182,7 @@ model Member {
   updatedAt          DateTime            @updatedAt
   father             Member?             @relation("FatherChildren", fields: [fatherId], references: [id], onDelete: SetNull)
   mother             Member?             @relation("MotherChildren", fields: [motherId], references: [id], onDelete: SetNull)
+  family             Family?             @relation(fields: [familyId], references: [id], onDelete: Cascade)
   fatherChildren     Member[]            @relation("FatherChildren")
   motherChildren     Member[]            @relation("MotherChildren")
   marriagesAsMember  Marriage[]          @relation("MarriageMember")
@@ -95,7 +191,8 @@ model Member {
   assets             MemberAsset[]
   events             MemberEvent[]
 
-  @@index([name])
+  @@index([familyId])
+  @@index([familyId, name])
   @@index([fatherId])
   @@index([motherId])
   @@index([isDeleted])
@@ -103,23 +200,31 @@ model Member {
 
 model AssetTag {
   id        String   @id @default(cuid())
-  name      String   @unique
+  familyId  String?
+  name      String
   enabled   Boolean  @default(true)
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  family    Family?  @relation(fields: [familyId], references: [id], onDelete: Cascade)
 
+  @@unique([familyId, name])
+  @@index([familyId])
   @@index([enabled, sortOrder])
 }
 
 model AssetSource {
   id        String   @id @default(cuid())
-  name      String   @unique
+  familyId  String?
+  name      String
   enabled   Boolean  @default(true)
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  family    Family?  @relation(fields: [familyId], references: [id], onDelete: Cascade)
 
+  @@unique([familyId, name])
+  @@index([familyId])
   @@index([enabled, sortOrder])
 }
 
@@ -137,6 +242,7 @@ enum MemberEventType {
 
 model MemberEvent {
   id          String          @id @default(cuid())
+  familyId    String?
   memberId    String
   createdById String?
   eventType   MemberEventType
@@ -146,9 +252,11 @@ model MemberEvent {
   isDeleted   Boolean         @default(false)
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+  family      Family?         @relation(fields: [familyId], references: [id], onDelete: Cascade)
   member      Member          @relation(fields: [memberId], references: [id], onDelete: Cascade)
   createdBy   User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
+  @@index([familyId])
   @@index([memberId])
   @@index([createdById])
   @@index([eventType])
@@ -163,6 +271,7 @@ enum MemberAssetCategory {
 
 model MemberAsset {
   id           String              @id @default(cuid())
+  familyId     String?
   memberId     String
   uploadedById String?
   category     MemberAssetCategory
@@ -179,9 +288,11 @@ model MemberAsset {
   isDeleted    Boolean             @default(false)
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
+  family       Family?             @relation(fields: [familyId], references: [id], onDelete: Cascade)
   member       Member              @relation(fields: [memberId], references: [id], onDelete: Cascade)
   uploadedBy   User?               @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
 
+  @@index([familyId])
   @@index([memberId])
   @@index([uploadedById])
   @@index([category])
@@ -204,6 +315,7 @@ enum SupplementRequestType {
 
 model SupplementRequest {
   id            String                   @id @default(cuid())
+  familyId      String?
   memberId      String
   requesterId   String
   reviewerId    String?
@@ -215,11 +327,13 @@ model SupplementRequest {
   reviewedAt    DateTime?
   createdAt     DateTime                 @default(now())
   updatedAt     DateTime                 @updatedAt
+  family        Family?                  @relation(fields: [familyId], references: [id], onDelete: Cascade)
   member        Member                   @relation(fields: [memberId], references: [id], onDelete: Cascade)
   requester     User                     @relation("SupplementRequester", fields: [requesterId], references: [id], onDelete: Cascade)
   reviewer      User?                    @relation("SupplementReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
   assets        SupplementRequestAsset[]
 
+  @@index([familyId])
   @@index([memberId])
   @@index([requesterId])
   @@index([reviewerId])
@@ -230,6 +344,7 @@ model SupplementRequest {
 
 model SupplementRequestAsset {
   id           String              @id @default(cuid())
+  familyId     String?
   requestId    String
   category     MemberAssetCategory
   filePath     String
@@ -244,8 +359,10 @@ model SupplementRequestAsset {
   sizeBytes    Int
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
+  family       Family?             @relation(fields: [familyId], references: [id], onDelete: Cascade)
   request      SupplementRequest   @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
+  @@index([familyId])
   @@index([requestId])
   @@index([category])
   @@index([createdAt])
@@ -254,6 +371,7 @@ model SupplementRequestAsset {
 
 model Marriage {
   id        String         @id @default(cuid())
+  familyId  String?
   pairKey   String         @unique
   memberId  String
   spouseId  String
@@ -263,9 +381,11 @@ model Marriage {
   isDeleted Boolean        @default(false)
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
+  family    Family?        @relation(fields: [familyId], references: [id], onDelete: Cascade)
   member    Member         @relation("MarriageMember", fields: [memberId], references: [id], onDelete: Cascade)
   spouse    Member         @relation("MarriageSpouse", fields: [spouseId], references: [id], onDelete: Cascade)
 
+  @@index([familyId])
   @@index([memberId])
   @@index([spouseId])
   @@index([isDeleted])
@@ -273,18 +393,23 @@ model Marriage {
 
 model KinshipAlias {
   id           String   @id @default(cuid())
-  relationCode String   @unique
+  familyId     String?
+  relationCode String
   standardTerm String
   familyAlias  String
   enabled      Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  family       Family?  @relation(fields: [familyId], references: [id], onDelete: Cascade)
 
+  @@unique([familyId, relationCode])
+  @@index([familyId])
   @@index([enabled])
 }
 
 model AuditLog {
   id         String      @id @default(cuid())
+  familyId   String?
   operatorId String?
   action     AuditAction
   targetType String
@@ -293,8 +418,10 @@ model AuditLog {
   after      Json?
   metadata   Json?
   createdAt  DateTime    @default(now())
+  family     Family?     @relation(fields: [familyId], references: [id], onDelete: Cascade)
   operator   User?       @relation(fields: [operatorId], references: [id], onDelete: SetNull)
 
+  @@index([familyId])
   @@index([operatorId])
   @@index([targetType, targetId])
   @@index([createdAt])

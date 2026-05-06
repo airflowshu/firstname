@@ -233,7 +233,12 @@ export default function MembersPage() {
       dataIndex: 'name',
       render: (_value: string, record: MemberListItem) => (
         <Space>
-          <Link href={`/members/${record.id}`}>{record.name}</Link>
+          <Link
+            href={`/members/${record.id}`}
+            className={record.lifeStatus === 'DECEASED' ? 'member-name-deceased' : undefined}
+          >
+            {record.name}
+          </Link>
           {record.isDeleted ? <Tag color="error">已软删除</Tag> : null}
         </Space>
       ),
@@ -249,7 +254,7 @@ export default function MembersPage() {
       render: (_: unknown, record: MemberListItem) => (
         <Space direction="vertical" size={2}>
           <Text>{formatDate(record.birthDate) || '出生日期未填写'}</Text>
-          <Text type="secondary">{record.nativePlace ?? '籍贯待补充'}</Text>
+          <Text type="secondary">{record.nativePlace ?? '籍贯（待补充）'}</Text>
         </Space>
       ),
     },
@@ -267,18 +272,6 @@ export default function MembersPage() {
       title: '字辈',
       dataIndex: 'generationName',
       render: (value?: string | null) => value ?? '-',
-    },
-    {
-      title: '状态',
-      dataIndex: 'lifeStatus',
-      render: (value: string) =>
-        value === 'ALIVE' ? (
-          <Tag color="green">在世</Tag>
-        ) : value === 'DECEASED' ? (
-          <Tag color="default">已故</Tag>
-        ) : (
-          <Tag>未知</Tag>
-        ),
     },
     actionColumn,
   ];
@@ -411,7 +404,7 @@ export default function MembersPage() {
             ) : null}
 
             {filtersExpanded ? (
-              <div className="filter-grid filter-grid-compact">
+              <div className="filter-grid filter-grid-compact members-filter-grid">
                 <Input.Search
                   allowClear
                   placeholder="搜索姓名 / 籍贯 / 字辈"
@@ -447,7 +440,7 @@ export default function MembersPage() {
                     updateSearchParams({ lifeStatus: value });
                   }}
                 />
-                <Space wrap>
+                <Space className="members-filter-actions">
                   <Button icon={<ReloadOutlined />} onClick={() => membersQuery.refetch()}>
                     刷新
                   </Button>
@@ -481,13 +474,15 @@ export default function MembersPage() {
                       <div className="mobile-list-card-head">
                         <div>
                           <div className="mobile-list-title">
-                            <Link href={`/members/${record.id}`}>{record.name}</Link>
+                            <Link
+                              href={`/members/${record.id}`}
+                              className={record.lifeStatus === 'DECEASED' ? 'member-name-deceased' : undefined}
+                            >
+                              {record.name}
+                            </Link>
                           </div>
                           <Space wrap size={[6, 6]} style={{ marginTop: 8 }}>
                             <Tag>{formatGender(record.gender)}</Tag>
-                            <Tag color={record.lifeStatus === 'ALIVE' ? 'green' : 'default'}>
-                              {formatLifeStatus(record.lifeStatus)}
-                            </Tag>
                             {record.isDeleted ? <Tag color="error">已软删除</Tag> : null}
                           </Space>
                         </div>

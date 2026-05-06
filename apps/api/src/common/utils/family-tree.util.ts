@@ -117,11 +117,11 @@ export function resolveSiblingToken(current: FamilyMemberSnapshot, sibling: Fami
 
   if (sibling.gender === Gender.MALE) {
     if (orderComparison < 0) {
-      return 'OB';
+      return 'LB';
     }
 
     if (orderComparison > 0) {
-      return 'LB';
+      return 'OB';
     }
 
     return 'B';
@@ -129,11 +129,11 @@ export function resolveSiblingToken(current: FamilyMemberSnapshot, sibling: Fami
 
   if (sibling.gender === Gender.FEMALE) {
     if (orderComparison < 0) {
-      return 'OS';
+      return 'LS';
     }
 
     if (orderComparison > 0) {
-      return 'LS';
+      return 'OS';
     }
 
     return 'Z';

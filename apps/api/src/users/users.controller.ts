@@ -12,13 +12,13 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  list() {
-    return this.usersService.list();
+  list(@CurrentUser() user: AuthenticatedUser) {
+    return this.usersService.list(user);
   }
 
   @Post()
   create(@Body() dto: CreateUserDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.usersService.create(dto, user.sub);
+    return this.usersService.create(dto, user);
   }
 
   @Patch(':id')
@@ -27,6 +27,6 @@ export class UsersController {
     @Body() dto: UpdateUserDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.usersService.update(id, dto, user.sub);
+    return this.usersService.update(id, dto, user);
   }
 }

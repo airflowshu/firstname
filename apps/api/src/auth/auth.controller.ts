@@ -6,7 +6,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import type { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
 import { AuthService } from './auth.service';
-import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto, LoginDto, SwitchFamilyDto } from './dto/login.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -58,5 +58,23 @@ export class AuthController {
   @Get('me')
   me(@CurrentUser() user: AuthenticatedUser) {
     return this.authService.me(user);
+  }
+
+  @Post('switch-family')
+  switchFamily(
+    @Body() dto: SwitchFamilyDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.authService.switchFamily(dto.familyId, user, response);
+  }
+
+  @Post('change-password')
+  changePassword(
+    @Body() dto: ChangePasswordDto,
+    @CurrentUser() user: AuthenticatedUser,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.authService.changePassword(dto, user, response);
   }
 }

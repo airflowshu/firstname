@@ -1,8 +1,20 @@
 'use client';
 
 import dayjs from 'dayjs';
-import { Alert, DatePicker, Form, Input, InputNumber, Modal, Select, Space, Tag, Typography } from 'antd';
-import { useEffect, useState } from 'react';
+import {
+  Alert,
+  AutoComplete,
+  DatePicker,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Select,
+  Space,
+  Tag,
+  Typography,
+} from 'antd';
+import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import type { DuplicateMemberCheckResult, LifeStatus } from '@/lib/types';
 import type { MemberListItem, MemberOption } from '@/lib/types';
@@ -18,12 +30,21 @@ type MemberFormValue = Partial<MemberListItem> & {
 
 type MemberFieldKey = 'gender' | 'fatherId' | 'motherId';
 
+type ExistingMemberNameMatchConfig = {
+  enabled?: boolean;
+  gender?: MemberListItem['gender'];
+  disabledIds?: string[];
+  relationLabel?: string;
+};
+
 export function MemberFormModal({
   open,
   title,
   initialValue,
   hint,
   disabledFields,
+  hiddenFields,
+  existingMemberNameMatch,
   loading,
   onCancel,
   onSubmit,
@@ -33,6 +54,8 @@ export function MemberFormModal({
   initialValue?: MemberFormValue;
   hint?: string;
   disabledFields?: Partial<Record<MemberFieldKey, boolean>>;
+  hiddenFields?: Partial<Record<MemberFieldKey, boolean>>;
+  existingMemberNameMatch?: ExistingMemberNameMatchConfig;
   loading?: boolean;
   onCancel: () => void;
   onSubmit: (values: Record<string, unknown>) => Promise<void> | void;
@@ -48,6 +71,9 @@ export function MemberFormModal({
   const watchedNativePlace = Form.useWatch('nativePlace', form) as string | undefined;
   const [duplicateResult, setDuplicateResult] = useState<DuplicateMemberCheckResult | null>(null);
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+  const [nameMatchOptions, setNameMatchOptions] = useState<MemberOption[]>([]);
+  const [fetchingNameMatches, setFetchingNameMatches] = useState(false);
+  const [selectedExistingMember, setSelectedExistingMember] = useState<MemberOption | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -60,6 +86,8 @@ export function MemberFormModal({
       birthDate: initialValue?.birthDate ? dayjs(initialValue.birthDate) : undefined,
       deathDate: initialValue?.deathDate ? dayjs(initialValue.deathDate) : undefined,
     });
+    setSelectedExistingMember(null);
+    setNameMatchOptions([]);
   }, [form, initialValue, open]);
 
   useEffect(() => {
@@ -75,6 +103,12 @@ export function MemberFormModal({
   useEffect(() => {
     if (!open) {
       setDuplicateResult(null);
+      return;
+    }
+
+    if (selectedExistingMember) {
+      setDuplicateResult(null);
+      setCheckingDuplicate(false);
       return;
     }
 
@@ -114,6 +148,7 @@ export function MemberFormModal({
   }, [
     initialValue?.id,
     open,
+    selectedExistingMember,
     watchedBirthDate,
     watchedFatherId,
     watchedGender,
@@ -121,6 +156,56 @@ export function MemberFormModal({
     watchedMotherId,
     watchedName,
     watchedNativePlace,
+  ]);
+
+  useEffect(() => {
+    if (!open || !existingMemberNameMatch?.enabled) {
+      setNameMatchOptions([]);
+      setSelectedExistingMember(null);
+      return;
+    }
+
+    const normalizedName = watchedName?.trim();
+    if (!normalizedName) {
+      setNameMatchOptions([]);
+      setSelectedExistingMember(null);
+      return;
+    }
+
+    if (selectedExistingMember && selectedExistingMember.name !== normalizedName) {
+      setSelectedExistingMember(null);
+    }
+
+    const timer = window.setTimeout(() => {
+      setFetchingNameMatches(true);
+      void api
+        .getMemberOptions(normalizedName)
+        .then((options) => {
+          const disabledIds = new Set(existingMemberNameMatch.disabledIds ?? []);
+          setNameMatchOptions(
+            options.filter(
+              (option) =>
+                !disabledIds.has(option.id) &&
+                (!existingMemberNameMatch.gender || option.gender === existingMemberNameMatch.gender),
+            ),
+          );
+        })
+        .catch(() => {
+          setNameMatchOptions([]);
+        })
+        .finally(() => {
+          setFetchingNameMatches(false);
+        });
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    existingMemberNameMatch?.disabledIds,
+    existingMemberNameMatch?.enabled,
+    existingMemberNameMatch?.gender,
+    open,
+    selectedExistingMember,
+    watchedName,
   ]);
 
   const seedOptions: MemberOption[] = [
@@ -142,6 +227,76 @@ export function MemberFormModal({
       : null,
   ].filter(Boolean) as MemberOption[];
 
+  const nameAutocompleteOptions = useMemo(
+    () =>
+      nameMatchOptions.map((option) => ({
+        value: option.name,
+        member: option,
+        label: (
+          <div className="member-select-option-line" title={[option.name, option.subtitle].filter(Boolean).join(' · ')}>
+            <span className="member-select-option-name">{option.name}</span>
+            {option.subtitle ? <span className="member-select-option-native">· {option.subtitle}</span> : null}
+          </div>
+        ),
+      })),
+    [nameMatchOptions],
+  );
+
+  const resetExistingMemberFields = () => {
+    form.setFieldsValue({
+      gender: initialValue?.gender,
+      birthDate: undefined,
+      deathDate: undefined,
+      lifeStatus: initialValue?.lifeStatus ?? 'ALIVE',
+      generationName: undefined,
+      birthOrder: undefined,
+      nativePlace: undefined,
+      notes: undefined,
+    });
+  };
+
+  const applyExistingMember = async (option: MemberOption) => {
+    setSelectedExistingMember(option);
+    setDuplicateResult(null);
+    setCheckingDuplicate(false);
+    form.setFieldsValue({
+      name: option.name,
+      gender: option.gender,
+    });
+
+    try {
+      const member = await api.getMember(option.id);
+      const subtitle = [
+        member.birthDate ? `${dayjs(member.birthDate).format('YYYY-MM-DD')} 生` : null,
+        member.deathDate ? `${dayjs(member.deathDate).format('YYYY-MM-DD')} 殁` : null,
+        member.generationName ? `字辈 ${member.generationName}` : null,
+        member.nativePlace,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+
+      setSelectedExistingMember({
+        id: member.id,
+        name: member.name,
+        gender: member.gender,
+        subtitle,
+      });
+      form.setFieldsValue({
+        name: member.name,
+        gender: member.gender,
+        birthDate: member.birthDate ? dayjs(member.birthDate) : undefined,
+        deathDate: member.deathDate ? dayjs(member.deathDate) : undefined,
+        lifeStatus: member.lifeStatus,
+        generationName: member.generationName ?? undefined,
+        birthOrder: member.birthOrder ?? undefined,
+        nativePlace: member.nativePlace ?? undefined,
+        notes: member.notes ?? undefined,
+      });
+    } catch {
+      setSelectedExistingMember(option);
+    }
+  };
+
   return (
     <Modal
       open={open}
@@ -158,12 +313,21 @@ export function MemberFormModal({
         onFinish={async (values) => {
           await onSubmit({
             ...values,
+            existingMemberId: existingMemberNameMatch?.enabled ? selectedExistingMember?.id : undefined,
             birthDate: values.birthDate ? values.birthDate.format('YYYY-MM-DD') : undefined,
             deathDate: values.deathDate ? values.deathDate.format('YYYY-MM-DD') : undefined,
           });
         }}
       >
-        {hint ? (
+        {selectedExistingMember ? (
+          <Alert
+            style={{ marginBottom: 16 }}
+            type="success"
+            showIcon
+            message={`已选择已有成员作为${existingMemberNameMatch?.relationLabel ?? '亲属'}`}
+            description={`下方为“${selectedExistingMember.name}”当前资料概要。提交后只绑定该成员，不会创建同名新成员。`}
+          />
+        ) : hint ? (
           <Alert
             style={{ marginBottom: 16 }}
             type="info"
@@ -218,9 +382,36 @@ export function MemberFormModal({
             name="name"
             label="姓名"
             rules={[{ required: true, message: '请输入姓名' }]}
-            extra={checkingDuplicate ? '正在检测是否与现有成员重复…' : '输入姓名后系统会自动检查疑似重复成员'}
+            extra={
+              existingMemberNameMatch?.enabled
+                ? '可输入姓名后从匹配结果中选择已有成员；不选择则创建新成员'
+                : checkingDuplicate
+                  ? '正在检测是否与现有成员重复…'
+                  : '输入姓名后系统会自动检查疑似重复成员'
+            }
           >
-            <Input placeholder="请输入成员姓名" />
+            {existingMemberNameMatch?.enabled ? (
+              <AutoComplete
+                allowClear
+                options={nameAutocompleteOptions}
+                notFoundContent={fetchingNameMatches ? '正在检索匹配成员…' : '暂无匹配成员'}
+                placeholder="请输入姓名，或选择已有成员"
+                onSelect={(_, option) => {
+                  const memberOption = (option as { member?: MemberOption }).member;
+                  if (memberOption) {
+                    void applyExistingMember(memberOption);
+                  }
+                }}
+                onChange={(value) => {
+                  if (selectedExistingMember && value !== selectedExistingMember.name) {
+                    setSelectedExistingMember(null);
+                    resetExistingMemberFields();
+                  }
+                }}
+              />
+            ) : (
+              <Input placeholder="请输入成员姓名" />
+            )}
           </Form.Item>
           <Form.Item name="gender" label="性别" rules={[{ required: true, message: '请选择性别' }]}>
             <Select
@@ -249,7 +440,7 @@ export function MemberFormModal({
               }),
             ]}
           >
-            <DatePicker style={{ width: '100%' }} />
+            <DatePicker style={{ width: '100%' }} disabled={Boolean(selectedExistingMember)} />
           </Form.Item>
           <Form.Item
             name="deathDate"
@@ -270,12 +461,13 @@ export function MemberFormModal({
           >
             <DatePicker
               style={{ width: '100%' }}
-              disabled={lifeStatus !== 'DECEASED'}
+              disabled={Boolean(selectedExistingMember) || lifeStatus !== 'DECEASED'}
               placeholder={lifeStatus === 'DECEASED' ? '请选择去世日期' : '请先将生命状态设为已故'}
             />
           </Form.Item>
           <Form.Item name="lifeStatus" label="生命状态">
             <Select
+              disabled={Boolean(selectedExistingMember)}
               options={[
                 { label: '在世', value: 'ALIVE' },
                 { label: '已故', value: 'DECEASED' },
@@ -284,65 +476,73 @@ export function MemberFormModal({
             />
           </Form.Item>
           <Form.Item name="generationName" label="字辈 / 代际">
-            <Input placeholder="如：振、国、磊" />
+            <Input disabled={Boolean(selectedExistingMember)} placeholder="如：振、国、磊" />
           </Form.Item>
           <Form.Item name="birthOrder" label="排行">
-            <InputNumber min={1} style={{ width: '100%' }} />
+            <InputNumber disabled={Boolean(selectedExistingMember)} min={1} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="nativePlace" label="籍贯">
-            <Input placeholder="如：江苏徐州" />
+            <Input disabled={Boolean(selectedExistingMember)} placeholder="如：江苏徐州" />
           </Form.Item>
-          <Form.Item
-            name="fatherId"
-            label="父亲"
-            dependencies={['motherId']}
-            rules={[
-              ({ getFieldValue }) => ({
-                validator(_, value) {
-                  const motherId = getFieldValue('motherId') as string | undefined;
-                  if (value && motherId && value === motherId) {
-                    return Promise.reject(new Error('父亲和母亲不能选择同一成员'));
-                  }
+          {hiddenFields?.fatherId ? null : (
+            <Form.Item
+              name="fatherId"
+              label="父亲"
+              dependencies={['motherId']}
+              rules={[
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    const motherId = getFieldValue('motherId') as string | undefined;
+                    if (value && motherId && value === motherId) {
+                      return Promise.reject(new Error('父亲和母亲不能选择同一成员'));
+                    }
 
-                  return Promise.resolve();
-                },
-              }),
-            ]}
-          >
-            <RemoteMemberSelect
-              placeholder="搜索并选择父亲"
-              disabledIds={initialValue?.id ? [initialValue.id] : []}
-              seedOptions={seedOptions}
-              disabled={Boolean(disabledFields?.fatherId)}
-            />
-          </Form.Item>
-          <Form.Item
-            name="motherId"
-            label="母亲"
-            dependencies={['fatherId']}
-            rules={[
-              ({ getFieldValue }) => ({
-                validator(_, value) {
-                  const fatherId = getFieldValue('fatherId') as string | undefined;
-                  if (value && fatherId && value === fatherId) {
-                    return Promise.reject(new Error('父亲和母亲不能选择同一成员'));
-                  }
+                    return Promise.resolve();
+                  },
+                }),
+              ]}
+            >
+              <RemoteMemberSelect
+                placeholder="搜索并选择父亲"
+                disabledIds={initialValue?.id ? [initialValue.id] : []}
+                seedOptions={seedOptions}
+                disabled={Boolean(disabledFields?.fatherId)}
+              />
+            </Form.Item>
+          )}
+          {hiddenFields?.motherId ? null : (
+            <Form.Item
+              name="motherId"
+              label="母亲"
+              dependencies={['fatherId']}
+              rules={[
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    const fatherId = getFieldValue('fatherId') as string | undefined;
+                    if (value && fatherId && value === fatherId) {
+                      return Promise.reject(new Error('父亲和母亲不能选择同一成员'));
+                    }
 
-                  return Promise.resolve();
-                },
-              }),
-            ]}
-          >
-            <RemoteMemberSelect
-              placeholder="搜索并选择母亲"
-              disabledIds={initialValue?.id ? [initialValue.id] : []}
-              seedOptions={seedOptions}
-              disabled={Boolean(disabledFields?.motherId)}
-            />
-          </Form.Item>
+                    return Promise.resolve();
+                  },
+                }),
+              ]}
+            >
+              <RemoteMemberSelect
+                placeholder="搜索并选择母亲"
+                disabledIds={initialValue?.id ? [initialValue.id] : []}
+                seedOptions={seedOptions}
+                disabled={Boolean(disabledFields?.motherId)}
+              />
+            </Form.Item>
+          )}
         </div>
         <Form.Item name="notes" label="备注">
-          <Input.TextArea rows={4} placeholder="可记录族谱说明、生平简介、额外备注等" />
+          <Input.TextArea
+            disabled={Boolean(selectedExistingMember)}
+            rows={4}
+            placeholder="可记录族谱说明、生平简介、额外备注等"
+          />
         </Form.Item>
       </Form>
     </Modal>

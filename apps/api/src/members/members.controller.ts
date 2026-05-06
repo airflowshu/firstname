@@ -55,10 +55,7 @@ export class MembersController {
 
   @Roles(UserRole.ADMIN)
   @Get('import-template')
-  async downloadImportTemplate(
-    @CurrentUser() _user: AuthenticatedUser,
-    @Res() response: Response,
-  ) {
+  async downloadImportTemplate(@CurrentUser() _user: AuthenticatedUser, @Res() response: Response) {
     const buffer = await this.membersService.exportImportTemplate();
     response.setHeader(
       'Content-Disposition',
@@ -80,10 +77,7 @@ export class MembersController {
       },
     }),
   )
-  importMembers(
-    @UploadedFile() file: Express.Multer.File,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
+  importMembers(@UploadedFile() file: Express.Multer.File, @CurrentUser() user: AuthenticatedUser) {
     return this.membersService.importMembers(file, user.sub);
   }
 
@@ -188,13 +182,7 @@ export class MembersController {
     @Body() dto: UploadMemberAssetsDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.membersService.uploadAssets(
-      id,
-      files,
-      MemberAssetCategory.PHOTO,
-      user.sub,
-      dto,
-    );
+    return this.membersService.uploadAssets(id, files, MemberAssetCategory.PHOTO, user.sub, dto);
   }
 
   @Roles(UserRole.ADMIN)
@@ -212,13 +200,7 @@ export class MembersController {
     @Body() dto: UploadMemberAssetsDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.membersService.uploadAssets(
-      id,
-      files,
-      MemberAssetCategory.DOCUMENT,
-      user.sub,
-      dto,
-    );
+    return this.membersService.uploadAssets(id, files, MemberAssetCategory.DOCUMENT, user.sub, dto);
   }
 
   @Roles(UserRole.ADMIN)

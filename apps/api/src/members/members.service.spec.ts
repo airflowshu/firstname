@@ -159,4 +159,120 @@ describe('MembersService', () => {
       ),
     ).rejects.toThrow('当前成员尚未录入父母信息，暂无法快速新增兄弟姐妹');
   });
+
+  it('should bind existing member as quick father without creating a new member', async () => {
+    const getByIdSpy = jest
+      .spyOn(service, 'getById')
+      .mockResolvedValue({ id: 'existing-father' } as never);
+    prisma.member.findFirst
+      .mockResolvedValueOnce({
+        id: 'anchor-member',
+        name: '子女成员',
+        gender: Gender.MALE,
+        birthDate: new Date('2000-01-01'),
+        deathDate: null,
+        lifeStatus: LifeStatus.ALIVE,
+        fatherId: null,
+        motherId: null,
+        father: null,
+        mother: null,
+        isDeleted: false,
+      })
+      .mockResolvedValueOnce({
+        id: 'existing-father',
+        name: '已有父亲',
+        gender: Gender.MALE,
+        birthDate: new Date('1970-01-01'),
+        isDeleted: false,
+      });
+    prisma.member.update.mockResolvedValue({});
+
+    try {
+      await service.createQuickRelative(
+        'anchor-member',
+        {
+          relationType: 'father',
+          existingMemberId: 'existing-father',
+          member: {
+            name: '已有父亲',
+            gender: Gender.MALE,
+          },
+        },
+        'operator-id',
+      );
+    } finally {
+      getByIdSpy.mockRestore();
+    }
+
+    expect(prisma.member.create).not.toHaveBeenCalled();
+    expect(prisma.member.update).toHaveBeenCalledWith({
+      where: { id: 'anchor-member' },
+      data: { fatherId: 'existing-father' },
+    });
+  });
+
+  it('should bind existing member as quick child without creating a new member', async () => {
+    const getByIdSpy = jest
+      .spyOn(service, 'getById')
+      .mockResolvedValue({ id: 'existing-child' } as never);
+    prisma.member.findFirst
+      .mockResolvedValueOnce({
+        id: 'anchor-member',
+        name: '父亲成员',
+        gender: Gender.MALE,
+        birthDate: new Date('1970-01-01'),
+        deathDate: null,
+        lifeStatus: LifeStatus.ALIVE,
+        fatherId: null,
+        motherId: null,
+        father: null,
+        mother: null,
+        isDeleted: false,
+      })
+      .mockResolvedValueOnce({
+        id: 'existing-child',
+        name: '已有子女',
+        gender: Gender.MALE,
+        birthDate: new Date('2000-01-01'),
+        deathDate: null,
+        lifeStatus: LifeStatus.ALIVE,
+        fatherId: null,
+        motherId: null,
+        isDeleted: false,
+      })
+      .mockResolvedValueOnce({
+        id: 'anchor-member',
+        name: '父亲成员',
+        gender: Gender.MALE,
+        birthDate: new Date('1970-01-01'),
+        isDeleted: false,
+      });
+    prisma.member.update.mockResolvedValue({});
+
+    try {
+      await service.createQuickRelative(
+        'anchor-member',
+        {
+          relationType: 'child',
+          existingMemberId: 'existing-child',
+          member: {
+            name: '已有子女',
+            gender: Gender.MALE,
+          },
+        },
+        'operator-id',
+      );
+    } finally {
+      getByIdSpy.mockRestore();
+    }
+
+    expect(prisma.member.create).not.toHaveBeenCalled();
+    expect(prisma.member.update).toHaveBeenCalledWith({
+      where: { id: 'existing-child' },
+      data: {
+        fatherId: 'anchor-member',
+        motherId: undefined,
+      },
+    });
+  });
 });

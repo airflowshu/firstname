@@ -17,9 +17,11 @@ interface AuthContextValue {
   user: AuthUser | null;
   initialized: boolean;
   isAdmin: boolean;
+  isSuper: boolean;
   login: (token: string, user: AuthUser) => void;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  switchFamily: (familyId: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -137,13 +139,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        const persistedSession = readPersistedAuthSession();
-
-        if (!persistedSession?.accessToken || !persistedSession.user) {
-          setToken(null);
-          setUser(null);
-          persistAuthSession(null);
-        }
+        setRuntimeAccessToken(null);
+        setToken(null);
+        setUser(null);
+        persistAuthSession(null);
       } finally {
         if (!cancelled) {
           setInitialized(true);
@@ -195,17 +194,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [logout]);
 
+  const switchFamily = useCallback(async (familyId: string) => {
+    const nextSession = await api.switchFamily(familyId);
+    setRuntimeAccessToken(nextSession.accessToken);
+    setToken(nextSession.accessToken);
+    setUser(nextSession.user);
+    persistAuthSession({
+      accessToken: nextSession.accessToken,
+      user: nextSession.user,
+    });
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       token,
       user,
       initialized,
       isAdmin: user?.role === 'ADMIN',
+      isSuper: user?.platformRole === 'SUPER',
       login,
       logout,
       refreshProfile,
+      switchFamily,
     }),
-    [initialized, login, logout, refreshProfile, token, user],
+    [initialized, login, logout, refreshProfile, switchFamily, token, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

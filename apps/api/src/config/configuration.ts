@@ -92,6 +92,7 @@ export default () => {
       604_800,
     ),
     refreshTokenCookieName: process.env.REFRESH_TOKEN_COOKIE_NAME?.trim() || 'fisrtname_rt',
+    frontendBaseUrl: process.env.FRONTEND_BASE_URL?.trim() || 'http://localhost:3000',
     uploadDir: process.env.UPLOAD_DIR ?? 'uploads',
     servePublicUploads: parseBoolean(process.env.SERVE_PUBLIC_UPLOADS, nodeEnv !== 'production'),
     corsOrigin: parseCorsOrigin(process.env.CORS_ORIGIN),

@@ -65,6 +65,11 @@ type QuickRelativeConfig = {
   hint: string;
   initialValue?: MemberFormValue;
   disabledFields?: Partial<Record<'gender' | 'fatherId' | 'motherId', boolean>>;
+  hiddenFields?: Partial<Record<'gender' | 'fatherId' | 'motherId', boolean>>;
+  existingMemberNameMatch?: {
+    gender?: MemberListItem['gender'];
+    relationLabel: string;
+  };
 };
 
 export default function MemberDetailPage() {
@@ -199,6 +204,7 @@ export default function MemberDetailPage() {
   const quickRelativeMutation = useMutation({
     mutationFn: async (payload: {
       relationType: QuickRelativeType;
+      existingMemberId?: string;
       member: Record<string, unknown>;
     }) => api.createQuickRelative(memberId, payload),
     onSuccess: async (_result, payload) => {
@@ -210,7 +216,11 @@ export default function MemberDetailPage() {
         sibling: '兄弟姐妹',
       };
 
-      message.success(`已快速新增${relationLabelMap[payload.relationType]}`);
+      message.success(
+        payload.existingMemberId
+          ? `已绑定${relationLabelMap[payload.relationType]}`
+          : `已快速新增${relationLabelMap[payload.relationType]}`,
+      );
       setQuickRelativeConfig(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['member', memberId] }),
@@ -429,6 +439,14 @@ export default function MemberDetailPage() {
         disabledFields: {
           gender: true,
         },
+        hiddenFields: {
+          fatherId: true,
+          motherId: true,
+        },
+        existingMemberNameMatch: {
+          gender: 'MALE',
+          relationLabel: '父亲',
+        },
       });
       return;
     }
@@ -444,6 +462,14 @@ export default function MemberDetailPage() {
         },
         disabledFields: {
           gender: true,
+        },
+        hiddenFields: {
+          fatherId: true,
+          motherId: true,
+        },
+        existingMemberNameMatch: {
+          gender: 'FEMALE',
+          relationLabel: '母亲',
         },
       });
       return;
@@ -511,6 +537,9 @@ export default function MemberDetailPage() {
         disabledFields: {
           fatherId: Boolean(father),
           motherId: Boolean(mother),
+        },
+        existingMemberNameMatch: {
+          relationLabel: '子女',
         },
       });
       return;
@@ -648,7 +677,7 @@ export default function MemberDetailPage() {
                       <Paragraph className="page-hero-desc">
                         {member?.gender === 'MALE' ? '男' : member?.gender === 'FEMALE' ? '女' : '未知'} ·{' '}
                         {member?.generationName ? `字辈 ${member.generationName} · ` : ''}
-                        {member?.nativePlace ?? '籍贯待补充'}
+                        {member?.nativePlace ?? '籍贯（待补充）'}
                       </Paragraph>
                       {member ? (
                         <div className="member-overview-pills">
@@ -761,9 +790,11 @@ export default function MemberDetailPage() {
                         <Descriptions.Item label="出生日期">
                           {formatDate(member.birthDate)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="去世日期">
-                          {formatDate(member.deathDate)}
-                        </Descriptions.Item>
+                        {member.lifeStatus === 'ALIVE' ? null : (
+                          <Descriptions.Item label="去世日期">
+                            {formatDate(member.deathDate)}
+                          </Descriptions.Item>
+                        )}
                         <Descriptions.Item label="生命状态">
                           {member.lifeStatus === 'ALIVE'
                             ? '在世'
@@ -781,7 +812,7 @@ export default function MemberDetailPage() {
                         <Descriptions.Item label="更新时间">
                           {formatDate(member.updatedAt, 'YYYY-MM-DD HH:mm')}
                         </Descriptions.Item>
-                        <Descriptions.Item label="备注" span={3}>
+                        <Descriptions.Item label="备注" span="filled">
                           {member.notes ?? '暂无备注'}
                         </Descriptions.Item>
                       </Descriptions>
@@ -1262,6 +1293,16 @@ export default function MemberDetailPage() {
           hint={quickRelativeConfig?.hint}
           initialValue={quickRelativeConfig?.initialValue}
           disabledFields={quickRelativeConfig?.disabledFields}
+          hiddenFields={quickRelativeConfig?.hiddenFields}
+          existingMemberNameMatch={
+            quickRelativeConfig?.existingMemberNameMatch
+              ? {
+                  ...quickRelativeConfig.existingMemberNameMatch,
+                  enabled: true,
+                  disabledIds: [memberId],
+                }
+              : undefined
+          }
           loading={quickRelativeMutation.isPending}
           onCancel={() => setQuickRelativeConfig(null)}
           onSubmit={async (values) => {
@@ -1271,6 +1312,8 @@ export default function MemberDetailPage() {
 
             await quickRelativeMutation.mutateAsync({
               relationType: quickRelativeConfig.relationType,
+              existingMemberId:
+                typeof values.existingMemberId === 'string' ? values.existingMemberId : undefined,
               member: values,
             });
           }}

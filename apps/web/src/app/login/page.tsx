@@ -6,12 +6,21 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { api, ApiError } from '@/lib/api';
+import type { AuthUser } from '@/lib/types';
 
 const { Paragraph, Text, Title } = Typography;
 
+function resolveLoginRedirect(user: AuthUser | null, fallback: string) {
+  if (user?.platformRole === 'SUPER' && !user.activeFamilyId) {
+    return '/platform';
+  }
+
+  return fallback;
+}
+
 export default function LoginPage() {
   const router = useRouter();
-  const { token, login } = useAuth();
+  const { token, user, login } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [redirectPath, setRedirectPath] = useState('/dashboard');
   const { message } = App.useApp();
@@ -31,9 +40,9 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (token) {
-      router.replace(redirectPath);
+      router.replace(resolveLoginRedirect(user, redirectPath));
     }
-  }, [redirectPath, router, token]);
+  }, [redirectPath, router, token, user]);
 
   return (
     <div className="login-page">
@@ -76,16 +85,14 @@ export default function LoginPage() {
               <Title level={2} style={{ marginBottom: 8 }}>
                 欢迎登录
               </Title>
-              <Text type="secondary">
-                管理员可维护数据；普通角色可浏览统计、成员详情、关系图与称呼计算。
-              </Text>
+              <Text type="secondary">支持手机号或用户名登录；同一账号可在多个家族之间切换。</Text>
             </div>
 
             <Alert
               type="info"
               showIcon
               message="演示账号"
-              description="管理员：admin / admin123456　　查看用户：viewer / viewer123456"
+              description="超级管理员：super / super123456　　管理员：admin / admin123456　　查看用户：viewer / viewer123456"
             />
 
             <Form
@@ -97,7 +104,7 @@ export default function LoginPage() {
                   const result = await api.login(values);
                   login(result.accessToken, result.user);
                   message.success('登录成功，正在进入系统');
-                  router.replace(redirectPath);
+                  router.replace(resolveLoginRedirect(result.user, redirectPath));
                 } catch (error) {
                   message.error(error instanceof ApiError ? error.message : '登录失败，请稍后重试');
                 } finally {
@@ -106,11 +113,11 @@ export default function LoginPage() {
               }}
             >
               <Form.Item
-                label="用户名"
+                label="用户名或手机号"
                 name="username"
-                rules={[{ required: true, message: '请输入用户名' }]}
+                rules={[{ required: true, message: '请输入用户名或手机号' }]}
               >
-                <Input prefix={<UserOutlined />} size="large" placeholder="请输入用户名" />
+                <Input prefix={<UserOutlined />} size="large" placeholder="请输入用户名或手机号" />
               </Form.Item>
               <Form.Item
                 label="密码"

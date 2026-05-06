@@ -1,4 +1,4 @@
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { BadRequestException, Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
@@ -8,6 +8,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { NestFactory } from '@nestjs/core';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
+import { formatValidationErrors } from './common/utils/validation-message.util';
 import { PrismaService } from './prisma/prisma.service';
 import { AppModule } from './app.module';
 
@@ -48,6 +49,7 @@ async function bootstrap() {
       transformOptions: {
         enableImplicitConversion: true,
       },
+      exceptionFactory: (errors) => new BadRequestException(formatValidationErrors(errors)),
     }),
   );
   app.useGlobalFilters(new AllExceptionsFilter());
