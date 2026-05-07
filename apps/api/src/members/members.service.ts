@@ -113,36 +113,65 @@ export class MembersService {
   }
 
   async options(keyword?: string) {
-    const members = await this.prisma.member.findMany({
-      where: {
-        isDeleted: false,
-        name: keyword
-          ? {
-              contains: keyword,
-              mode: 'insensitive',
-            }
-          : undefined,
-      },
-      orderBy: [{ name: 'asc' }, { birthDate: 'asc' }],
-      take: 20,
-      select: {
-        id: true,
-        name: true,
-        gender: true,
-        birthDate: true,
-        generationName: true,
-        nativePlace: true,
-      },
-    });
+    const result = await this.optionsPage({ keyword, page: 1, pageSize: 20 });
+    return result.data;
+  }
 
-    return members.map((member) => ({
-      id: member.id,
-      name: member.name,
-      gender: member.gender,
-      subtitle: [member.generationName, member.nativePlace, member.birthDate?.getFullYear()]
-        .filter(Boolean)
-        .join(' · '),
-    }));
+  async optionsPage({
+    keyword,
+    page = 1,
+    pageSize = 30,
+  }: {
+    keyword?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+    const safePageSize =
+      Number.isFinite(pageSize) && pageSize > 0 ? Math.min(Math.floor(pageSize), 100) : 30;
+    const normalizedKeyword = keyword?.trim();
+    const where: Prisma.MemberWhereInput = {
+      isDeleted: false,
+      name: normalizedKeyword
+        ? {
+            contains: normalizedKeyword,
+            mode: 'insensitive',
+          }
+        : undefined,
+    };
+
+    const [total, members] = await this.prisma.$transaction([
+      this.prisma.member.count({ where }),
+      this.prisma.member.findMany({
+        where,
+        orderBy: [{ name: 'asc' }, { birthDate: 'asc' }],
+        skip: (safePage - 1) * safePageSize,
+        take: safePageSize,
+        select: {
+          id: true,
+          name: true,
+          gender: true,
+          birthDate: true,
+          generationName: true,
+          nativePlace: true,
+        },
+      }),
+    ]);
+
+    return {
+      total,
+      page: safePage,
+      pageSize: safePageSize,
+      hasMore: safePage * safePageSize < total,
+      data: members.map((member) => ({
+        id: member.id,
+        name: member.name,
+        gender: member.gender,
+        subtitle: [member.generationName, member.nativePlace, member.birthDate?.getFullYear()]
+          .filter(Boolean)
+          .join(' · '),
+      })),
+    };
   }
 
   async checkDuplicates(dto: MemberDuplicateCheckDto) {

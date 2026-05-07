@@ -6,7 +6,25 @@ export type Gender = 'MALE' | 'FEMALE' | 'UNKNOWN';
 export type LifeStatus = 'ALIVE' | 'DECEASED' | 'UNKNOWN';
 export type MarriageStatus = 'ACTIVE' | 'DIVORCED' | 'WIDOWED';
 export type SupplementRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
-export type SupplementRequestType = 'BASIC_INFO' | 'PHOTO' | 'DOCUMENT';
+export type SupplementRequestType =
+  | 'BASIC_INFO'
+  | 'PHOTO'
+  | 'DOCUMENT'
+  | 'MEMBER_CREATE'
+  | 'MEMBER_UPDATE'
+  | 'MEMBER_DELETE'
+  | 'MEMBER_RESTORE'
+  | 'QUICK_RELATIVE'
+  | 'MARRIAGE_CREATE'
+  | 'MARRIAGE_UPDATE'
+  | 'MARRIAGE_DELETE'
+  | 'MARRIAGE_RESTORE'
+  | 'MEMBER_PHOTO'
+  | 'ASSET_UPDATE'
+  | 'ASSET_DELETE'
+  | 'EVENT_CREATE'
+  | 'EVENT_DELETE'
+  | 'MEMBER_IMPORT';
 export type MemberEventType =
   | 'BIRTH'
   | 'MARRIAGE'
@@ -101,6 +119,14 @@ export interface MemberOption {
   name: string;
   gender: Gender;
   subtitle: string;
+}
+
+export interface MemberOptionsPageResponse {
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+  data: MemberOption[];
 }
 
 export interface DuplicateMemberMatch {
@@ -492,17 +518,7 @@ export interface AuditLogRecord {
   } | null;
 }
 
-export interface SupplementRequestPatch {
-  name?: string;
-  gender?: Gender;
-  birthDate?: string;
-  deathDate?: string;
-  lifeStatus?: LifeStatus;
-  generationName?: string;
-  birthOrder?: number;
-  nativePlace?: string;
-  notes?: string;
-}
+export type SupplementRequestPatch = Record<string, unknown>;
 
 export interface SupplementRequestRecord {
   id: string;
@@ -514,8 +530,11 @@ export interface SupplementRequestRecord {
   createdAt: string;
   updatedAt: string;
   patch: SupplementRequestPatch;
+  beforeSnapshot?: Record<string, unknown> | null;
+  afterSnapshot?: Record<string, unknown> | null;
+  payload?: Record<string, unknown> | null;
   assets: SupplementRequestAssetRecord[];
-  member: {
+  member?: {
     id: string;
     name: string;
     gender: Gender;

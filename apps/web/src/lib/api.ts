@@ -21,6 +21,7 @@ import type {
   SupplementRequestRecord,
   MemberKinshipResponse,
   MemberOption,
+  MemberOptionsPageResponse,
   MembersResponse,
   InvitationInspectResult,
   InvitationResult,
@@ -515,6 +516,25 @@ export const api = {
     request<MemberOption[]>(
       `/members/options${keyword ? `?keyword=${encodeURIComponent(keyword)}` : ''}`,
     ),
+  getMemberOptionsPage: ({
+    keyword,
+    page = 1,
+    pageSize = 30,
+  }: {
+    keyword?: string;
+    page?: number;
+    pageSize?: number;
+  }) => {
+    const search = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    if (keyword) {
+      search.set('keyword', keyword);
+    }
+
+    return request<MemberOptionsPageResponse>(`/members/options-page?${search.toString()}`);
+  },
   checkMemberDuplicates: (payload: unknown) =>
     request<DuplicateMemberCheckResult>('/members/duplicate-check', {
       method: 'POST',
@@ -552,6 +572,64 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  createMemberCreateRequest: (payload: { member: unknown; reason?: string }) =>
+    request<SupplementRequestRecord>('/supplement-requests/member-create', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  createMemberUpdateRequest: (payload: { memberId: string; patch: unknown; reason?: string }) =>
+    request<SupplementRequestRecord>('/supplement-requests/member-update', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  createMemberDeleteRequest: (payload: { memberId: string; reason?: string }) =>
+    request<SupplementRequestRecord>('/supplement-requests/member-delete', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  createMemberRestoreRequest: (payload: { memberId: string; reason?: string }) =>
+    request<SupplementRequestRecord>('/supplement-requests/member-restore', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  createQuickRelativeRequest: (payload: {
+    memberId: string;
+    request: {
+      relationType: 'father' | 'mother' | 'spouse' | 'child' | 'sibling';
+      existingMemberId?: string;
+      member: Record<string, unknown>;
+    };
+    reason?: string;
+  }) =>
+    request<SupplementRequestRecord>('/supplement-requests/quick-relative', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  createMarriageChangeRequest: (payload: {
+    memberId: string;
+    action: 'CREATE' | 'UPDATE' | 'DELETE' | 'RESTORE';
+    marriageId?: string;
+    create?: unknown;
+    update?: unknown;
+    reason?: string;
+  }) =>
+    request<SupplementRequestRecord>('/supplement-requests/marriage', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  createMemberPhotoRequest: (payload: { memberId: string; file: File; reason?: string }) => {
+    const formData = new FormData();
+    formData.append('memberId', payload.memberId);
+    formData.append('file', payload.file);
+    if (payload.reason) {
+      formData.append('reason', payload.reason);
+    }
+
+    return request<SupplementRequestRecord>('/supplement-requests/member-photo', {
+      method: 'POST',
+      body: formData,
+    });
+  },
   createSupplementAssetRequest: (
     payload: {
       memberId: string;
@@ -591,6 +669,51 @@ export const api = {
     });
 
     return request<SupplementRequestRecord>('/supplement-requests/assets', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+  createAssetMetadataChangeRequest: (payload: {
+    memberId: string;
+    assetId: string;
+    action: 'UPDATE' | 'DELETE';
+    patch?: {
+      title?: string;
+      sourceType?: string;
+      source?: string;
+      tags?: string[];
+      description?: string;
+    };
+    reason?: string;
+  }) =>
+    request<SupplementRequestRecord>('/supplement-requests/asset-update', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  createEventChangeRequest: (payload: {
+    memberId: string;
+    action: 'CREATE' | 'DELETE';
+    eventId?: string;
+    event?: {
+      eventType: MemberTimelineEvent['eventType'];
+      title: string;
+      description?: string;
+      eventDate: string;
+    };
+    reason?: string;
+  }) =>
+    request<SupplementRequestRecord>('/supplement-requests/event', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  createMemberImportRequest: (file: File, reason?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (reason) {
+      formData.append('reason', reason);
+    }
+
+    return request<SupplementRequestRecord>('/supplement-requests/import', {
       method: 'POST',
       body: formData,
     });

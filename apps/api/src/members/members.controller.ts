@@ -47,13 +47,24 @@ export class MembersController {
     return this.membersService.options(keyword);
   }
 
-  @Roles(UserRole.ADMIN)
+  @Get('options-page')
+  optionsPage(
+    @Query('keyword') keyword?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    return this.membersService.optionsPage({
+      keyword,
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+    });
+  }
+
   @Post('duplicate-check')
   duplicateCheck(@Body() dto: MemberDuplicateCheckDto) {
     return this.membersService.checkDuplicates(dto);
   }
 
-  @Roles(UserRole.ADMIN)
   @Get('import-template')
   async downloadImportTemplate(@CurrentUser() _user: AuthenticatedUser, @Res() response: Response) {
     const buffer = await this.membersService.exportImportTemplate();

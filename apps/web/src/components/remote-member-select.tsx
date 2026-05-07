@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import type { MemberOption } from '@/lib/types';
 
+const PAGE_SIZE = 30;
+
 function uniqueOptions(options: MemberOption[]) {
   const map = new Map<string, MemberOption>();
   options.forEach((option) => map.set(option.id, option));
@@ -70,6 +72,8 @@ export function RemoteMemberSelect({
   const [fetching, setFetching] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [loadedPage, setLoadedPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
 
   const mergedOptions = useMemo(
     () =>
@@ -107,11 +111,19 @@ export function RemoteMemberSelect({
     [disabledIds, mergedOptions],
   );
 
-  const loadOptions = async (keyword = '') => {
+  const loadOptions = async (keyword = '', nextPage = 1, append = false) => {
     setFetching(true);
     try {
-      const result = await api.getMemberOptions(keyword);
-      setFetchedOptions(result);
+      const result = await api.getMemberOptionsPage({
+        keyword,
+        page: nextPage,
+        pageSize: PAGE_SIZE,
+      });
+      setFetchedOptions((current) =>
+        append ? uniqueOptions([...current, ...result.data]) : result.data,
+      );
+      setLoadedPage(result.page);
+      setHasMore(result.hasMore);
     } finally {
       setFetching(false);
     }
@@ -123,7 +135,7 @@ export function RemoteMemberSelect({
     }
 
     const timer = window.setTimeout(() => {
-      void loadOptions(searchValue.trim());
+      void loadOptions(searchValue.trim(), 1, false);
     }, 250);
 
     return () => window.clearTimeout(timer);
@@ -198,17 +210,24 @@ export function RemoteMemberSelect({
       notFoundContent={fetching ? '正在检索匹配成员…' : '暂无匹配成员'}
       options={normalizedOptions}
       onSearch={setSearchValue}
+      onPopupScroll={(event) => {
+        const target = event.currentTarget;
+        const nearBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 24;
+        if (!nearBottom || fetching || !hasMore) {
+          return;
+        }
+
+        void loadOptions(searchValue.trim(), loadedPage + 1, true);
+      }}
       onOpenChange={(open) => {
         setDropdownOpen(open);
-
-        if (open && fetchedOptions.length === 0) {
-          void loadOptions(searchValue.trim());
-        }
       }}
       onClear={() => {
         setSearchValue('');
         setFetchedOptions([]);
         setSelectedFallback(null);
+        setLoadedPage(0);
+        setHasMore(true);
       }}
       onChange={(nextValue) => onChange?.(nextValue)}
     />

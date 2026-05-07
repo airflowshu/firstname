@@ -111,8 +111,21 @@ export default function MembersPage() {
       }),
   });
 
-  const saveMutation = useMutation({
+  const saveMutation = useMutation<unknown, Error, Record<string, unknown>>({
     mutationFn: async (payload: Record<string, unknown>) => {
+      if (!isAdmin) {
+        if (editingMember) {
+          return api.createMemberUpdateRequest({
+            memberId: editingMember.id,
+            patch: payload,
+          });
+        }
+
+        return api.createMemberCreateRequest({
+          member: payload,
+        });
+      }
+
       if (editingMember) {
         return api.updateMember(editingMember.id, payload);
       }
@@ -120,12 +133,19 @@ export default function MembersPage() {
       return api.createMember(payload);
     },
     onSuccess: async () => {
-      message.success(editingMember ? '成员信息已更新' : '成员已创建');
+      message.success(
+        isAdmin
+          ? editingMember
+            ? '成员信息已更新'
+            : '成员已创建'
+          : '变更申请已提交，等待管理员审核',
+      );
       setModalOpen(false);
       setEditingMember(undefined);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['members'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] }),
+        queryClient.invalidateQueries({ queryKey: ['supplement-requests'] }),
       ]);
     },
     onError: (error) => {
@@ -133,8 +153,18 @@ export default function MembersPage() {
     },
   });
 
-  const deleteMutation = useMutation({
+  const deleteMutation = useMutation<unknown, Error, MemberListItem>({
     mutationFn: async (member: MemberListItem) => {
+      if (!isAdmin) {
+        if (member.isDeleted) {
+          await api.createMemberRestoreRequest({ memberId: member.id });
+          return null;
+        }
+
+        await api.createMemberDeleteRequest({ memberId: member.id });
+        return null;
+      }
+
       if (member.isDeleted) {
         await api.restoreMember(member.id);
         return null;
@@ -144,10 +174,17 @@ export default function MembersPage() {
       return null;
     },
     onSuccess: async (_result, member) => {
-      message.success(member.isDeleted ? '成员已恢复' : '成员已删除');
+      message.success(
+        isAdmin
+          ? member.isDeleted
+            ? '成员已恢复'
+            : '成员已删除'
+          : '变更申请已提交，等待管理员审核',
+      );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['members'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] }),
+        queryClient.invalidateQueries({ queryKey: ['supplement-requests'] }),
       ]);
     },
     onError: (error) => {
@@ -155,14 +192,19 @@ export default function MembersPage() {
     },
   });
 
-  const importMutation = useMutation({
-    mutationFn: (file: File) => api.importMembers(file),
+  const importMutation = useMutation<unknown, Error, File>({
+    mutationFn: (file: File) => (isAdmin ? api.importMembers(file) : api.createMemberImportRequest(file)),
     onSuccess: async (result) => {
-      message.success(result.message);
+      message.success(
+        isAdmin && typeof result === 'object' && result !== null && 'message' in result
+          ? String(result.message)
+          : '批量导入申请已提交，等待管理员审核',
+      );
       setImportOpen(false);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['members'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] }),
+        queryClient.invalidateQueries({ queryKey: ['supplement-requests'] }),
       ]);
     },
     onError: (error) => {
@@ -199,8 +241,7 @@ export default function MembersPage() {
           <Button size="small">
             <Link href={`/graph?memberId=${record.id}`}>图谱</Link>
           </Button>
-          {isAdmin ? (
-            <>
+          <>
               <Button
                 size="small"
                 icon={<EditOutlined />}
@@ -219,12 +260,11 @@ export default function MembersPage() {
                   {record.isDeleted ? '恢复' : '删除'}
                 </Button>
               </Popconfirm>
-            </>
-          ) : null}
+          </>
         </Space>
       ),
     }),
-    [deleteMutation, isAdmin],
+    [deleteMutation],
   );
 
   const desktopColumns = [
@@ -291,12 +331,13 @@ export default function MembersPage() {
               </Paragraph>
             </div>
             <div className="page-hero-actions">
-              {isAdmin ? (
-                <>
+              <>
                   <Dropdown
                     menu={{
                       items: [
-                        {
+                        ...(isAdmin
+                          ? [
+                              {
                           key: 'export',
                           icon: <DownloadOutlined />,
                           label: 'Excel 导出',
@@ -313,7 +354,9 @@ export default function MembersPage() {
                               message.error(error instanceof ApiError ? error.message : '导出失败');
                             }
                           },
-                        },
+                              },
+                            ]
+                          : []),
                         {
                           key: 'import',
                           icon: <UploadOutlined />,
@@ -335,8 +378,12 @@ export default function MembersPage() {
                   >
                     {isMobile ? '新建' : '新建成员'}
                   </Button>
-                </>
-              ) : null}
+                  <Button>
+                    <Link href="/supplement-requests">
+                      {isAdmin ? '待审核变更' : '我的待审核变更'}
+                    </Link>
+                  </Button>
+              </>
             </div>
           </div>
         </Card>
@@ -514,7 +561,7 @@ export default function MembersPage() {
                         <Button size="small">
                           <Link href={`/members/${record.id}`}>查看详情</Link>
                         </Button>
-                        {isAdmin ? (
+                        <>
                           <Button
                             size="small"
                             icon={<EditOutlined />}
@@ -525,8 +572,6 @@ export default function MembersPage() {
                           >
                             编辑
                           </Button>
-                        ) : null}
-                        {isAdmin ? (
                           <Popconfirm
                             title={record.isDeleted ? '确定恢复该成员吗？' : '确定删除该成员吗？'}
                             onConfirm={() => deleteMutation.mutate(record)}
@@ -535,7 +580,7 @@ export default function MembersPage() {
                               {record.isDeleted ? '恢复' : '删除'}
                             </Button>
                           </Popconfirm>
-                        ) : null}
+                        </>
                       </Space>
                     </div>
                   </Card>
@@ -554,7 +599,13 @@ export default function MembersPage() {
 
         <MemberFormModal
           open={modalOpen}
-          title={editingMember ? `编辑成员：${editingMember.name}` : '新建成员'}
+          title={
+            editingMember
+              ? `${isAdmin ? '编辑成员' : '提交成员编辑'}：${editingMember.name}`
+              : isAdmin
+                ? '新建成员'
+                : '提交新建成员'
+          }
           initialValue={editingMember}
           loading={saveMutation.isPending}
           onCancel={() => {

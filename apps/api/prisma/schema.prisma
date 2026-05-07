@@ -311,24 +311,42 @@ enum SupplementRequestType {
   BASIC_INFO
   PHOTO
   DOCUMENT
+  MEMBER_CREATE
+  MEMBER_UPDATE
+  MEMBER_DELETE
+  MEMBER_RESTORE
+  QUICK_RELATIVE
+  MARRIAGE_CREATE
+  MARRIAGE_UPDATE
+  MARRIAGE_DELETE
+  MARRIAGE_RESTORE
+  MEMBER_PHOTO
+  ASSET_UPDATE
+  ASSET_DELETE
+  EVENT_CREATE
+  EVENT_DELETE
+  MEMBER_IMPORT
 }
 
 model SupplementRequest {
   id            String                   @id @default(cuid())
   familyId      String?
-  memberId      String
+  memberId      String?
   requesterId   String
   reviewerId    String?
   requestType   SupplementRequestType    @default(BASIC_INFO)
   status        SupplementRequestStatus  @default(PENDING)
   patch         Json
+  beforeSnapshot Json?
+  afterSnapshot  Json?
+  payload       Json?
   reason        String?
   reviewComment String?
   reviewedAt    DateTime?
   createdAt     DateTime                 @default(now())
   updatedAt     DateTime                 @updatedAt
   family        Family?                  @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  member        Member                   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  member        Member?                  @relation(fields: [memberId], references: [id], onDelete: Cascade)
   requester     User                     @relation("SupplementRequester", fields: [requesterId], references: [id], onDelete: Cascade)
   reviewer      User?                    @relation("SupplementReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
   assets        SupplementRequestAsset[]

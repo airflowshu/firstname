@@ -4,6 +4,8 @@ import {
   AimOutlined,
   ApartmentOutlined,
   DeploymentUnitOutlined,
+  FullscreenExitOutlined,
+  FullscreenOutlined,
   InfoCircleOutlined,
   UndoOutlined,
 } from '@ant-design/icons';
@@ -18,6 +20,7 @@ import {
   Select,
   Space,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd';
 import Link from 'next/link';
@@ -57,18 +60,33 @@ export default function GraphPage() {
   const searchParams = useSearchParams();
   const { isMobile } = useViewportMode();
   const graphRef = useRef<GraphViewerHandle | null>(null);
+  const graphShellRef = useRef<HTMLDivElement | null>(null);
   const [centerId, setCenterId] = useState<string | undefined>(searchParams.get('memberId') ?? undefined);
   const [compareId, setCompareId] = useState<string | undefined>(searchParams.get('compareId') ?? undefined);
   const [graphDepth, setGraphDepth] = useState<number>(Number(searchParams.get('depth') ?? 3));
   const [relationResult, setRelationResult] = useState<MemberKinshipResponse>();
   const [helpOpen, setHelpOpen] = useState(false);
   const [graphRevision, setGraphRevision] = useState(0);
+  const [isGraphFullscreen, setIsGraphFullscreen] = useState(false);
 
   useEffect(() => {
     setCenterId(searchParams.get('memberId') ?? undefined);
     setCompareId(searchParams.get('compareId') ?? undefined);
     setGraphDepth(Math.max(2, Math.min(6, Number(searchParams.get('depth') ?? 3))));
   }, [searchParams]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsGraphFullscreen(document.fullscreenElement === graphShellRef.current);
+      window.setTimeout(() => graphRef.current?.fitView(), 120);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   const updateSearchParams = (patch: Record<string, string | undefined>) => {
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -83,6 +101,19 @@ export default function GraphPage() {
 
     const nextQuery = nextParams.toString();
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
+  };
+
+  const toggleGraphFullscreen = async () => {
+    if (!graphShellRef.current) {
+      return;
+    }
+
+    if (document.fullscreenElement === graphShellRef.current) {
+      await document.exitFullscreen();
+      return;
+    }
+
+    await graphShellRef.current.requestFullscreen();
   };
 
   const memberCalcMutation = useMutation({
@@ -277,55 +308,75 @@ export default function GraphPage() {
               <Text className="results-hint">
                 当前层级：{graphDepth} 层。建议先用 2-3 层快速定位，再逐步放大范围。
               </Text>
-              <div className="graph-toolbar-actions">
-                <Button icon={<AimOutlined />} onClick={() => graphRef.current?.fitView()}>
-                  适配画布
-                </Button>
-                <Button
-                  icon={<UndoOutlined />}
-                  onClick={() => setGraphRevision((current) => current + 1)}
-                >
-                  重置视图
-                </Button>
-                <Button
-                  icon={<DeploymentUnitOutlined />}
-                  onClick={() => setHelpOpen(true)}
-                >
-                  图例说明
-                </Button>
-              </div>
             </div>
 
-            <div className="graph-legend">
-              {graphLegend.map((item) => (
-                <span key={item.label} className="graph-legend-item">
-                  <span
-                    className={item.type === 'dot' ? 'graph-legend-dot' : 'graph-legend-line'}
-                    style={item.style}
-                  />
-                  <span>{item.label}</span>
-                </span>
-              ))}
-            </div>
           </Space>
         </Card>
 
         <Row gutter={[16, 16]}>
           <Col xs={24} xl={isMobile ? 24 : 17}>
-            <GraphViewer
-              key={`${centerId ?? 'empty'}-${graphDepth}-${graphRevision}`}
-              ref={graphRef}
-              data={graphQuery.data}
-              loading={graphQuery.isLoading}
-              highlightedNodeIds={highlightedNodeIds}
-              highlightedEdgeIds={highlightedEdgeIds}
-              targetNodeId={compareId}
-              onNodeClick={(id) => {
-                setCenterId(id);
-                setRelationResult(undefined);
-                updateSearchParams({ memberId: id });
-              }}
-            />
+            <div
+              ref={graphShellRef}
+              className={`graph-canvas-shell${isGraphFullscreen ? ' is-fullscreen' : ''}`}
+            >
+              <div className="graph-canvas-toolbar">
+                <Tooltip title="适配画布" placement="left">
+                  <Button
+                    aria-label="适配画布"
+                    icon={<AimOutlined />}
+                    onClick={() => graphRef.current?.fitView()}
+                  />
+                </Tooltip>
+                <Tooltip title="重置视图" placement="left">
+                  <Button
+                    aria-label="重置视图"
+                    icon={<UndoOutlined />}
+                    onClick={() => setGraphRevision((current) => current + 1)}
+                  />
+                </Tooltip>
+                <Tooltip title="图例说明" placement="left">
+                  <Button
+                    aria-label="图例说明"
+                    icon={<DeploymentUnitOutlined />}
+                    onClick={() => setHelpOpen(true)}
+                  />
+                </Tooltip>
+                <Tooltip title={isGraphFullscreen ? '退出全屏' : '全屏'} placement="left">
+                  <Button
+                    aria-label={isGraphFullscreen ? '退出全屏' : '全屏'}
+                    icon={isGraphFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+                    onClick={() => {
+                      void toggleGraphFullscreen();
+                    }}
+                  />
+                </Tooltip>
+              </div>
+              <div className="graph-canvas-legend">
+                {graphLegend.map((item) => (
+                  <span key={item.label} className="graph-legend-item">
+                    <span
+                      className={item.type === 'dot' ? 'graph-legend-dot' : 'graph-legend-line'}
+                      style={item.style}
+                    />
+                    <span>{item.label}</span>
+                  </span>
+                ))}
+              </div>
+              <GraphViewer
+                key={`${centerId ?? 'empty'}-${graphDepth}-${graphRevision}`}
+                ref={graphRef}
+                data={graphQuery.data}
+                loading={graphQuery.isLoading}
+                highlightedNodeIds={highlightedNodeIds}
+                highlightedEdgeIds={highlightedEdgeIds}
+                targetNodeId={compareId}
+                onNodeClick={(id) => {
+                  setCenterId(id);
+                  setRelationResult(undefined);
+                  updateSearchParams({ memberId: id });
+                }}
+              />
+            </div>
           </Col>
           {!isMobile ? <Col xs={24} xl={7}>{summaryCard}</Col> : null}
         </Row>

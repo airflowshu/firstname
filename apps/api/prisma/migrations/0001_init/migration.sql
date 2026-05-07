@@ -41,7 +41,7 @@ CREATE TYPE "MemberAssetCategory" AS ENUM ('PHOTO', 'DOCUMENT');
 CREATE TYPE "SupplementRequestStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
 
 -- CreateEnum
-CREATE TYPE "SupplementRequestType" AS ENUM ('BASIC_INFO', 'PHOTO', 'DOCUMENT');
+CREATE TYPE "SupplementRequestType" AS ENUM ('BASIC_INFO', 'PHOTO', 'DOCUMENT', 'MEMBER_CREATE', 'MEMBER_UPDATE', 'MEMBER_DELETE', 'MEMBER_RESTORE', 'QUICK_RELATIVE', 'MARRIAGE_CREATE', 'MARRIAGE_UPDATE', 'MARRIAGE_DELETE', 'MARRIAGE_RESTORE', 'MEMBER_PHOTO', 'ASSET_UPDATE', 'ASSET_DELETE', 'EVENT_CREATE', 'EVENT_DELETE', 'MEMBER_IMPORT');
 
 -- CreateTable
 CREATE TABLE "User" (
@@ -159,7 +159,7 @@ CREATE TABLE "AssetSource" (
 CREATE TABLE "MemberEvent" (
     "id" TEXT NOT NULL,
     "familyId" TEXT,
-    "memberId" TEXT NOT NULL,
+    "memberId" TEXT,
     "createdById" TEXT,
     "eventType" "MemberEventType" NOT NULL,
     "title" TEXT NOT NULL,
@@ -206,6 +206,9 @@ CREATE TABLE "SupplementRequest" (
     "requestType" "SupplementRequestType" NOT NULL DEFAULT 'BASIC_INFO',
     "status" "SupplementRequestStatus" NOT NULL DEFAULT 'PENDING',
     "patch" JSONB NOT NULL,
+    "beforeSnapshot" JSONB,
+    "afterSnapshot" JSONB,
+    "payload" JSONB,
     "reason" TEXT,
     "reviewComment" TEXT,
     "reviewedAt" TIMESTAMP(3),

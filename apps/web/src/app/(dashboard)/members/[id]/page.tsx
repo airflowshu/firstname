@@ -54,6 +54,18 @@ const { Paragraph, Text, Title } = Typography;
 
 type QuickRelativeType = 'father' | 'mother' | 'spouse' | 'child' | 'sibling';
 
+const memberEventTypeLabelMap: Record<MemberTimelineEvent['eventType'], string> = {
+  BIRTH: '出生',
+  MARRIAGE: '结婚',
+  DIVORCE: '离婚',
+  DEATH: '去世',
+  MOVE: '迁居',
+  CAREER: '事业',
+  HONOR: '荣誉',
+  STORY: '故事',
+  OTHER: '其他',
+};
+
 type MemberFormValue = Partial<MemberListItem> & {
   father?: { id: string; name: string; gender?: 'MALE' | 'FEMALE' | 'UNKNOWN' } | null;
   mother?: { id: string; name: string; gender?: 'MALE' | 'FEMALE' | 'UNKNOWN' } | null;
@@ -185,15 +197,19 @@ export default function MemberDetailPage() {
     [];
   const onlyActiveSpouse = activeSpouses.length === 1 ? activeSpouses[0] : null;
 
-  const saveMemberMutation = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => api.updateMember(memberId, payload),
+  const saveMemberMutation = useMutation<unknown, Error, Record<string, unknown>>({
+    mutationFn: (payload: Record<string, unknown>) =>
+      isAdmin
+        ? api.updateMember(memberId, payload)
+        : api.createMemberUpdateRequest({ memberId, patch: payload }),
     onSuccess: async () => {
-      message.success('成员信息已更新');
+      message.success(isAdmin ? '成员信息已更新' : '变更申请已提交，等待管理员审核');
       setEditOpen(false);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['member', memberId] }),
         queryClient.invalidateQueries({ queryKey: ['members'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] }),
+        queryClient.invalidateQueries({ queryKey: ['supplement-requests'] }),
       ]);
     },
     onError: (error) => {
@@ -201,12 +217,26 @@ export default function MemberDetailPage() {
     },
   });
 
-  const quickRelativeMutation = useMutation({
+  const quickRelativeMutation = useMutation<
+    unknown,
+    Error,
+    {
+      relationType: QuickRelativeType;
+      existingMemberId?: string;
+      member: Record<string, unknown>;
+    }
+  >({
     mutationFn: async (payload: {
       relationType: QuickRelativeType;
       existingMemberId?: string;
       member: Record<string, unknown>;
-    }) => api.createQuickRelative(memberId, payload),
+    }) =>
+      isAdmin
+        ? api.createQuickRelative(memberId, payload)
+        : api.createQuickRelativeRequest({
+            memberId,
+            request: payload,
+          }),
     onSuccess: async (_result, payload) => {
       const relationLabelMap: Record<QuickRelativeType, string> = {
         father: '父亲',
@@ -217,15 +247,18 @@ export default function MemberDetailPage() {
       };
 
       message.success(
-        payload.existingMemberId
-          ? `已绑定${relationLabelMap[payload.relationType]}`
-          : `已快速新增${relationLabelMap[payload.relationType]}`,
+        isAdmin
+          ? payload.existingMemberId
+            ? `已绑定${relationLabelMap[payload.relationType]}`
+            : `已快速新增${relationLabelMap[payload.relationType]}`
+          : '变更申请已提交，等待管理员审核',
       );
       setQuickRelativeConfig(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['member', memberId] }),
         queryClient.invalidateQueries({ queryKey: ['members'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] }),
+        queryClient.invalidateQueries({ queryKey: ['supplement-requests'] }),
       ]);
     },
     onError: (error) => {
@@ -233,8 +266,17 @@ export default function MemberDetailPage() {
     },
   });
 
-  const marriageMutation = useMutation({
+  const marriageMutation = useMutation<unknown, Error, Record<string, unknown>>({
     mutationFn: (payload: Record<string, unknown>) => {
+      if (!isAdmin) {
+        return api.createMarriageChangeRequest({
+          memberId,
+          action: editingMarriage ? 'UPDATE' : 'CREATE',
+          marriageId: editingMarriage?.id,
+          [editingMarriage ? 'update' : 'create']: payload,
+        });
+      }
+
       if (editingMarriage) {
         return api.updateMarriage(memberId, editingMarriage.id, payload);
       }
@@ -242,12 +284,19 @@ export default function MemberDetailPage() {
       return api.createMarriage(memberId, payload);
     },
     onSuccess: async () => {
-      message.success(editingMarriage ? '婚姻关系已更新' : '婚姻关系已创建');
+      message.success(
+        isAdmin
+          ? editingMarriage
+            ? '婚姻关系已更新'
+            : '婚姻关系已创建'
+          : '变更申请已提交，等待管理员审核',
+      );
       setMarriageOpen(false);
       setEditingMarriage(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['member', memberId] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] }),
+        queryClient.invalidateQueries({ queryKey: ['supplement-requests'] }),
       ]);
     },
     onError: (error) => {
@@ -255,29 +304,51 @@ export default function MemberDetailPage() {
     },
   });
 
-  const removeMarriageMutation = useMutation({
-    mutationFn: (marriageId: string) => api.deleteMarriage(memberId, marriageId),
+  const removeMarriageMutation = useMutation<unknown, Error, string>({
+    mutationFn: (marriageId: string) =>
+      isAdmin
+        ? api.deleteMarriage(memberId, marriageId)
+        : api.createMarriageChangeRequest({ memberId, action: 'DELETE', marriageId }),
     onSuccess: async () => {
-      message.success('婚姻关系已删除');
-      await queryClient.invalidateQueries({ queryKey: ['member', memberId] });
+      message.success(isAdmin ? '婚姻关系已删除' : '变更申请已提交，等待管理员审核');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['member', memberId] }),
+        queryClient.invalidateQueries({ queryKey: ['supplement-requests'] }),
+      ]);
     },
     onError: (error) => {
       message.error(error instanceof ApiError ? error.message : '删除婚姻关系失败');
     },
   });
 
-  const uploadMutation = useMutation({
-    mutationFn: (file: File) => api.uploadMemberPhoto(memberId, file),
+  const uploadMutation = useMutation<unknown, Error, File>({
+    mutationFn: (file: File) =>
+      isAdmin ? api.uploadMemberPhoto(memberId, file) : api.createMemberPhotoRequest({ memberId, file }),
     onSuccess: async () => {
-      message.success('头像上传成功');
-      await queryClient.invalidateQueries({ queryKey: ['member', memberId] });
+      message.success(isAdmin ? '头像上传成功' : '变更申请已提交，等待管理员审核');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['member', memberId] }),
+        queryClient.invalidateQueries({ queryKey: ['supplement-requests'] }),
+      ]);
     },
     onError: (error) => {
       message.error(error instanceof ApiError ? error.message : '头像上传失败');
     },
   });
 
-  const uploadAssetMutation = useMutation({
+  const uploadAssetMutation = useMutation<
+    unknown,
+    Error,
+    {
+      category: 'PHOTO' | 'DOCUMENT';
+      files: File[];
+      sourceType?: string;
+      title?: string;
+      source?: string;
+      tags: string[];
+      description?: string;
+    }
+  >({
     mutationFn: (payload: {
       category: 'PHOTO' | 'DOCUMENT';
       files: File[];
@@ -286,13 +357,34 @@ export default function MemberDetailPage() {
       source?: string;
       tags: string[];
       description?: string;
-    }) => api.uploadMemberAssets(memberId, payload.category, payload),
+    }) =>
+      isAdmin
+        ? api.uploadMemberAssets(memberId, payload.category, payload)
+        : api.createSupplementAssetRequest(
+            {
+              memberId,
+              category: payload.category,
+              sourceType: payload.sourceType,
+              title: payload.title,
+              source: payload.source,
+              tags: payload.tags,
+              description: payload.description,
+            },
+            payload.files,
+          ),
     onSuccess: async (_result, payload) => {
-      message.success(payload.category === 'PHOTO' ? '成员照片已上传' : '成员附件已上传');
+      message.success(
+        isAdmin
+          ? payload.category === 'PHOTO'
+            ? '成员照片已上传'
+            : '成员附件已上传'
+          : '变更申请已提交，等待管理员审核',
+      );
       setAssetModalType(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['member-assets', memberId] }),
         queryClient.invalidateQueries({ queryKey: ['member', memberId] }),
+        queryClient.invalidateQueries({ queryKey: ['supplement-requests'] }),
       ]);
     },
     onError: (error) => {
@@ -300,7 +392,18 @@ export default function MemberDetailPage() {
     },
   });
 
-  const updateAssetMutation = useMutation({
+  const updateAssetMutation = useMutation<
+    unknown,
+    Error,
+    {
+      assetId: string;
+      sourceType?: string;
+      title?: string;
+      source?: string;
+      tags: string[];
+      description?: string;
+    }
+  >({
     mutationFn: (payload: {
       assetId: string;
       sourceType?: string;
@@ -309,56 +412,103 @@ export default function MemberDetailPage() {
       tags: string[];
       description?: string;
     }) =>
-      api.updateMemberAsset(memberId, payload.assetId, {
-        sourceType: payload.sourceType,
-        title: payload.title,
-        source: payload.source,
-        tags: payload.tags,
-        description: payload.description,
-      }),
+      isAdmin
+        ? api.updateMemberAsset(memberId, payload.assetId, {
+            sourceType: payload.sourceType,
+            title: payload.title,
+            source: payload.source,
+            tags: payload.tags,
+            description: payload.description,
+          })
+        : api.createAssetMetadataChangeRequest({
+            memberId,
+            assetId: payload.assetId,
+            action: 'UPDATE',
+            patch: {
+              sourceType: payload.sourceType,
+              title: payload.title,
+              source: payload.source,
+              tags: payload.tags,
+              description: payload.description,
+            },
+          }),
     onSuccess: async () => {
-      message.success('资料信息已更新');
+      message.success(isAdmin ? '资料信息已更新' : '变更申请已提交，等待管理员审核');
       setEditingAsset(null);
-      await queryClient.invalidateQueries({ queryKey: ['member-assets', memberId] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['member-assets', memberId] }),
+        queryClient.invalidateQueries({ queryKey: ['supplement-requests'] }),
+      ]);
     },
     onError: (error) => {
       message.error(error instanceof ApiError ? error.message : '更新资料信息失败');
     },
   });
 
-  const eventMutation = useMutation({
+  const eventMutation = useMutation<
+    unknown,
+    Error,
+    {
+      eventType: MemberTimelineEvent['eventType'];
+      title: string;
+      description?: string;
+      eventDate: string;
+    }
+  >({
     mutationFn: (payload: {
       eventType: MemberTimelineEvent['eventType'];
       title: string;
       description?: string;
       eventDate: string;
-    }) => api.createMemberEvent(memberId, payload),
+    }) =>
+      isAdmin
+        ? api.createMemberEvent(memberId, payload)
+        : api.createEventChangeRequest({ memberId, action: 'CREATE', event: payload }),
     onSuccess: async () => {
-      message.success('成员事件已新增');
+      message.success(isAdmin ? '成员事件已新增' : '变更申请已提交，等待管理员审核');
       setEventOpen(false);
-      await queryClient.invalidateQueries({ queryKey: ['member', memberId] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['member', memberId] }),
+        queryClient.invalidateQueries({ queryKey: ['supplement-requests'] }),
+      ]);
     },
     onError: (error) => {
       message.error(error instanceof ApiError ? error.message : '新增成员事件失败');
     },
   });
 
-  const deleteEventMutation = useMutation({
-    mutationFn: (eventId: string) => api.deleteMemberEvent(memberId, eventId),
+  const deleteEventMutation = useMutation<unknown, Error, string>({
+    mutationFn: (eventId: string) =>
+      isAdmin
+        ? api.deleteMemberEvent(memberId, eventId)
+        : api.createEventChangeRequest({ memberId, action: 'DELETE', eventId }),
     onSuccess: async () => {
-      message.success('成员事件已删除');
-      await queryClient.invalidateQueries({ queryKey: ['member', memberId] });
+      message.success(isAdmin ? '成员事件已删除' : '变更申请已提交，等待管理员审核');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['member', memberId] }),
+        queryClient.invalidateQueries({ queryKey: ['supplement-requests'] }),
+      ]);
     },
     onError: (error) => {
       message.error(error instanceof ApiError ? error.message : '删除成员事件失败');
     },
   });
 
-  const deleteAssetMutation = useMutation({
-    mutationFn: (asset: MemberAssetRecord) => api.deleteMemberAsset(memberId, asset.id),
+  const deleteAssetMutation = useMutation<unknown, Error, MemberAssetRecord>({
+    mutationFn: (asset: MemberAssetRecord) =>
+      isAdmin
+        ? api.deleteMemberAsset(memberId, asset.id)
+        : api.createAssetMetadataChangeRequest({
+            memberId,
+            assetId: asset.id,
+            action: 'DELETE',
+          }),
     onSuccess: async () => {
-      message.success('成员资料已删除');
-      await queryClient.invalidateQueries({ queryKey: ['member-assets', memberId] });
+      message.success(isAdmin ? '成员资料已删除' : '变更申请已提交，等待管理员审核');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['member-assets', memberId] }),
+        queryClient.invalidateQueries({ queryKey: ['supplement-requests'] }),
+      ]);
     },
     onError: (error) => {
       message.error(error instanceof ApiError ? error.message : '删除资料失败');
@@ -624,19 +774,6 @@ export default function MemberDetailPage() {
     },
   ];
 
-  const viewerHeaderActionItems = [
-    {
-      key: 'supplement-photo',
-      label: '提交照片补充',
-      onClick: () => setAssetSupplementType('PHOTO'),
-    },
-    {
-      key: 'supplement-document',
-      label: '提交附件补充',
-      onClick: () => setAssetSupplementType('DOCUMENT'),
-    },
-  ];
-
   return (
     <AuthGuard>
       <div className="page-stack">
@@ -743,7 +880,7 @@ export default function MemberDetailPage() {
                   }
                 }}
               />
-              {isAdmin ? (
+              {member ? (
                 <>
                   <Dropdown menu={{ items: adminHeaderActionItems }}>
                     <Button loading={uploadMutation.isPending} disabled={isMemberPending}>
@@ -756,16 +893,7 @@ export default function MemberDetailPage() {
                     disabled={isMemberPending}
                     onClick={() => setEditOpen(true)}
                   >
-                    {isMobile ? '编辑' : '编辑档案'}
-                  </Button>
-                </>
-              ) : member ? (
-                <>
-                  <Dropdown menu={{ items: viewerHeaderActionItems }}>
-                    <Button>更多操作</Button>
-                  </Dropdown>
-                  <Button type="primary" onClick={() => setSupplementOpen(true)}>
-                    提交资料补充申请
+                    {isMobile ? (isAdmin ? '编辑' : '提交') : isAdmin ? '编辑档案' : '提交编辑'}
                   </Button>
                 </>
               ) : null}
@@ -836,7 +964,7 @@ export default function MemberDetailPage() {
                           把父母、子女、兄弟姐妹和婚姻关系集中维护；快速新增与现有配偶绑定统一从“添加关系”进入。
                         </Paragraph>
                       </div>
-                      {isAdmin ? (
+                      {member ? (
                         <div className="page-hero-actions">
                           <Dropdown menu={{ items: relationActionItems }}>
                             <Button type="primary" icon={<PlusOutlined />}>
@@ -956,7 +1084,7 @@ export default function MemberDetailPage() {
                         {
                           title: '操作',
                           render: (_: unknown, record) =>
-                            isAdmin ? (
+                            member ? (
                               <Space>
                                 <Button
                                   size="small"
@@ -971,20 +1099,22 @@ export default function MemberDetailPage() {
                                     setMarriageOpen(true);
                                   }}
                                 >
-                                  编辑
+                                  {isAdmin ? '编辑' : '提交编辑'}
                                 </Button>
                                 <Popconfirm
-                                  title="确定删除这条婚姻关系吗？"
+                                  title={
+                                    isAdmin
+                                      ? '确定删除这条婚姻关系吗？'
+                                      : '确定提交删除这条婚姻关系的审核申请吗？'
+                                  }
                                   onConfirm={() => removeMarriageMutation.mutate(record.id)}
                                 >
                                   <Button size="small" danger>
-                                    删除
+                                    {isAdmin ? '删除' : '提交删除'}
                                   </Button>
                                 </Popconfirm>
                               </Space>
-                            ) : (
-                              '-'
-                            ),
+                            ) : null,
                         },
                       ]}
                     />
@@ -1091,7 +1221,7 @@ export default function MemberDetailPage() {
                                 {Math.max(1, Math.round(asset.sizeBytes / 1024))} KB
                               </Text>
                               <Space size={8}>
-                                {isAdmin ? (
+                                {member ? (
                                   <Button
                                     size="small"
                                     icon={<EditOutlined />}
@@ -1100,7 +1230,7 @@ export default function MemberDetailPage() {
                                     编辑
                                   </Button>
                                 ) : null}
-                                {isAdmin ? (
+                                {member ? (
                                   <Popconfirm
                                     title="确定删除这张照片吗？"
                                     onConfirm={() => deleteAssetMutation.mutate(asset)}
@@ -1131,7 +1261,7 @@ export default function MemberDetailPage() {
                       renderItem={(asset) => (
                         <List.Item
                           actions={
-                            isAdmin
+                            member
                               ? [
                                   <Button
                                     key="edit"
@@ -1219,9 +1349,9 @@ export default function MemberDetailPage() {
                     className="soft-panel"
                     title="成员时间线"
                     extra={
-                      isAdmin ? (
+                      member ? (
                         <Button icon={<CalendarOutlined />} onClick={() => setEventOpen(true)}>
-                          新增事件
+                          {isAdmin ? '新增事件' : '提交事件'}
                         </Button>
                       ) : null
                     }
@@ -1245,14 +1375,14 @@ export default function MemberDetailPage() {
                                   <Tag color={event.source === 'system' ? 'default' : 'processing'}>
                                     {event.source === 'system' ? '系统事件' : '自定义事件'}
                                   </Tag>
-                                  <Tag>{event.eventType}</Tag>
+                                  <Tag>{memberEventTypeLabelMap[event.eventType] ?? event.eventType}</Tag>
                                 </Space>
                                 <Text type="secondary">{formatDate(event.eventDate)}</Text>
                               </div>
                               {event.description ? (
                                 <Paragraph className="member-event-desc">{event.description}</Paragraph>
                               ) : null}
-                              {event.source === 'custom' && isAdmin ? (
+                              {event.source === 'custom' && member ? (
                                 <Popconfirm
                                   title="确定删除这条自定义事件吗？"
                                   onConfirm={() => deleteEventMutation.mutate(event.id)}
@@ -1278,7 +1408,7 @@ export default function MemberDetailPage() {
 
         <MemberFormModal
           open={editOpen}
-          title={`编辑成员：${member?.name ?? ''}`}
+          title={`${isAdmin ? '编辑成员' : '提交成员编辑'}：${member?.name ?? ''}`}
           initialValue={member}
           loading={saveMemberMutation.isPending}
           onCancel={() => setEditOpen(false)}
@@ -1321,7 +1451,13 @@ export default function MemberDetailPage() {
 
         <MarriageFormModal
           open={marriageOpen}
-          title={editingMarriage ? `编辑婚姻关系：${editingMarriage.spouseName}` : '新增婚姻关系'}
+          title={
+            editingMarriage
+              ? `${isAdmin ? '编辑婚姻关系' : '提交婚姻关系编辑'}：${editingMarriage.spouseName}`
+              : isAdmin
+                ? '新增婚姻关系'
+                : '提交新增婚姻关系'
+          }
           spouseName={editingMarriage?.spouseName}
           canSelectSpouse={!editingMarriage}
           disabledIds={member ? [member.id] : []}
