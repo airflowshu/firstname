@@ -19,6 +19,7 @@ import {
   Card,
   Checkbox,
   Col,
+  Drawer,
   Image,
   Input,
   List,
@@ -93,10 +94,14 @@ function renderAssetPreview(asset: MemberAssetLibraryItem) {
             isPdf ? '#b42318' : isZip ? '#7c3aed' : '#8a704f',
         }}
       />
-      <Text strong className="asset-library-doc-name">
-        {asset.title || asset.originalName}
-      </Text>
-      <Text type="secondary">{Math.max(1, Math.round(asset.sizeBytes / 1024))} KB</Text>
+      <div className="asset-library-doc-info">
+        <Text strong className="asset-library-doc-name">
+          {asset.title || asset.originalName}
+        </Text>
+        <Text type="secondary" className="asset-library-doc-size">
+          {Math.max(1, Math.round(asset.sizeBytes / 1024))} KB
+        </Text>
+      </div>
     </div>
   );
 }
@@ -124,6 +129,7 @@ export default function AssetLibraryPage() {
   const [pageSize, setPageSize] = useState(18);
   const [editingAsset, setEditingAsset] = useState<MemberAssetLibraryItem | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [importDrawerOpen, setImportDrawerOpen] = useState(false);
   const [lastImportResult, setLastImportResult] = useState<AssetImportBatchResult | null>(null);
   const [lastImportDraft, setLastImportDraft] = useState<AssetImportWizardDraft | null>(null);
   const [retryImportDraft, setRetryImportDraft] = useState<AssetImportWizardDraft | null>(null);
@@ -450,16 +456,19 @@ export default function AssetLibraryPage() {
             </div>
             <div className="page-hero-actions">
               {isAdmin ? (
-                <Button
-                  type="primary"
-                  icon={<UploadOutlined />}
-                  onClick={() => {
-                    setRetryImportDraft(null);
-                    setImportOpen(true);
-                  }}
-                >
-                  {isMobile ? '批量导入' : '批量导入向导'}
-                </Button>
+                <>
+                  <Button
+                    type="primary"
+                    icon={<UploadOutlined />}
+                    onClick={() => {
+                      setRetryImportDraft(null);
+                      setImportOpen(true);
+                    }}
+                  >
+                    {isMobile ? '批量导入' : '批量导入向导'}
+                  </Button>
+                  <Button onClick={() => setImportDrawerOpen(true)}>展开导入记录</Button>
+                </>
               ) : null}
               <Button>
                 <Link href="/members">{isMobile ? '成员管理' : '前往成员管理'}</Link>
@@ -500,104 +509,6 @@ export default function AssetLibraryPage() {
             </Card>
           </Col>
         </Row>
-
-        {isAdmin ? (
-          <Card
-            className="soft-panel"
-            title="最近导入批次"
-            loading={importBatchesQuery.isLoading}
-          >
-            <List
-              dataSource={importBatchesQuery.data?.data ?? []}
-              locale={{ emptyText: '暂无批量导入记录。' }}
-              renderItem={(item) => (
-                <List.Item>
-                  <List.Item.Meta
-                    title={
-                      <Space wrap size={[8, 8]}>
-                        <Text strong>{item.metadata?.memberName ?? '未命名成员'}</Text>
-                        <Tag color={item.metadata?.category === 'PHOTO' ? 'magenta' : 'blue'}>
-                          {item.metadata?.category === 'PHOTO' ? '照片资料' : '附件资料'}
-                        </Tag>
-                        <Tag color={(item.metadata?.failedCount ?? 0) > 0 ? 'warning' : 'success'}>
-                          成功 {item.metadata?.successCount ?? 0} / 失败 {item.metadata?.failedCount ?? 0}
-                        </Tag>
-                      </Space>
-                    }
-                    description={
-                      <Space direction="vertical" size={4}>
-                        <Text type="secondary">
-                          操作人：{item.operator?.username ?? '-'} · 导入时间{' '}
-                          {formatDate(item.createdAt, 'YYYY-MM-DD HH:mm:ss')}
-                        </Text>
-                        <Text type="secondary">
-                          来源：
-                          {[item.metadata?.sourceType, item.metadata?.source]
-                            .filter(Boolean)
-                            .join(' · ') || '-'}
-                        </Text>
-                        <Text type="secondary">
-                          标签：
-                          {item.metadata?.tags?.length ? item.metadata.tags.join('、') : '-'}
-                        </Text>
-                        {item.metadata?.failures && item.metadata.failures.length > 0 ? (
-                          <Text type="warning">
-                            最近异常：{item.metadata.failures[0].originalName} -{' '}
-                            {item.metadata.failures[0].message}
-                          </Text>
-                        ) : null}
-                        <Space wrap>
-                          <Button
-                            size="small"
-                            onClick={() =>
-                              focusImportBatch({
-                                batchId: item.id,
-                                memberName: item.metadata?.memberName ?? '未命名成员',
-                                createdAssetIds: item.metadata?.createdAssetIds ?? [],
-                              })
-                            }
-                          >
-                            {isMobile ? '查看批次' : '查看本批次资料'}
-                          </Button>
-                          {lastImportResult?.auditLogId === item.id &&
-                          lastImportDraft &&
-                          (lastImportResult.failedCount ?? 0) > 0 ? (
-                            <Button
-                              size="small"
-                              onClick={() =>
-                                retryFailedImport(
-                                  lastImportResult.failures.map((failure) => failure.inputIndex),
-                                )
-                              }
-                            >
-                              重试失败项
-                            </Button>
-                          ) : null}
-                          <Button
-                            size="small"
-                            type="primary"
-                            onClick={() =>
-                              focusImportBatch(
-                                {
-                                  batchId: item.id,
-                                  memberName: item.metadata?.memberName ?? '未命名成员',
-                                  createdAssetIds: item.metadata?.createdAssetIds ?? [],
-                                },
-                                { preselect: true },
-                              )
-                            }
-                          >
-                            {isMobile ? '继续整理' : '继续批量整理'}
-                          </Button>
-                        </Space>
-                      </Space>
-                    }
-                  />
-                </List.Item>
-              )}
-            />
-          </Card>
-        ) : null}
 
         <Card className="soft-panel">
           <div className="filter-panel">
@@ -993,6 +904,105 @@ export default function AssetLibraryPage() {
             </div>
           ) : null}
         </Card>
+
+        {isAdmin ? (
+          <Drawer
+            title="最近导入批次"
+            placement="right"
+            onClose={() => setImportDrawerOpen(false)}
+            open={importDrawerOpen}
+            width={isMobile ? '100%' : 360}
+            className="import-batch-drawer"
+          >
+            <List
+              className="import-batch-drawer-list"
+              split={false}
+              loading={importBatchesQuery.isLoading}
+              dataSource={importBatchesQuery.data?.data ?? []}
+              locale={{ emptyText: '暂无批量导入记录。' }}
+              renderItem={(item) => {
+                const failedCount = item.metadata?.failedCount ?? 0;
+                const hasFailed = failedCount > 0;
+
+                return (
+                  <List.Item className="import-batch-record-list-item">
+                    <Card className="import-batch-record-card" variant="borderless">
+                      <div className="import-batch-record-header">
+                        <Text strong className="import-batch-record-member">
+                          {item.metadata?.memberName ?? '未命名成员'}
+                        </Text>
+                        <Space wrap size={[8, 8]}>
+                          <Tag color={item.metadata?.category === 'PHOTO' ? 'magenta' : 'blue'}>
+                            {item.metadata?.category === 'PHOTO' ? '照片资料' : '附件资料'}
+                          </Tag>
+                          <Tag color={hasFailed ? 'warning' : 'success'}>
+                            成功 {item.metadata?.successCount ?? 0} / 失败 {failedCount}
+                          </Tag>
+                        </Space>
+                      </div>
+
+                      <div className="import-batch-record-meta">
+                        <Paragraph type="secondary" className="import-batch-record-meta-line">
+                          操作人：{item.operator?.username ?? '-'} · 导入时间{' '}
+                          {formatDate(item.createdAt, 'YYYY-MM-DD HH:mm:ss')}
+                        </Paragraph>
+                        <Paragraph type="secondary" className="import-batch-record-meta-line">
+                          来源：
+                          {[item.metadata?.sourceType, item.metadata?.source]
+                            .filter(Boolean)
+                            .join(' · ') || '-'}
+                        </Paragraph>
+                        <Paragraph type="secondary" className="import-batch-record-meta-line">
+                          标签：
+                          {item.metadata?.tags?.length ? item.metadata.tags.join('、') : '-'}
+                        </Paragraph>
+                      </div>
+
+                      {item.metadata?.failures && item.metadata.failures.length > 0 ? (
+                        <div className="import-batch-record-warning">
+                          <Text type="warning">
+                            最近异常：{item.metadata.failures[0].originalName} -{' '}
+                            {item.metadata.failures[0].message}
+                          </Text>
+                        </div>
+                      ) : null}
+
+                      <Space wrap className="import-batch-record-actions">
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            setImportDrawerOpen(false);
+                            focusImportBatch({
+                              batchId: item.id,
+                              memberName: item.metadata?.memberName ?? '未命名成员',
+                              createdAssetIds: item.metadata?.createdAssetIds ?? [],
+                            });
+                          }}
+                        >
+                          {isMobile ? '查看批次' : '查看本批次资料'}
+                        </Button>
+                        {lastImportResult?.auditLogId === item.id &&
+                        lastImportDraft &&
+                        (lastImportResult.failedCount ?? 0) > 0 ? (
+                          <Button
+                            size="small"
+                            onClick={() =>
+                              retryFailedImport(
+                                lastImportResult.failures.map((failure) => failure.inputIndex),
+                              )
+                            }
+                          >
+                            重试失败项
+                          </Button>
+                        ) : null}
+                      </Space>
+                    </Card>
+                  </List.Item>
+                );
+              }}
+            />
+          </Drawer>
+        ) : null}
 
         <MemberAssetModal
           open={Boolean(editingAsset)}

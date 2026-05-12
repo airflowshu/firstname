@@ -182,10 +182,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           className="app-sider"
         >
           <div className="app-brand">
-            <Title level={4} className="brand-title">
-              {collapsed ? '谱' : '家族姓氏系统'}
-            </Title>
-            {!collapsed ? <Text type="secondary">中国家族血亲关系管理</Text> : null}
+            {collapsed ? (
+              <Title level={4} className="brand-title">
+                谱
+              </Title>
+            ) : (
+              <div className="brand-main">
+                <div className="brand-stamp" aria-hidden="true">
+                  家族
+                  <br />
+                  谱牒
+                </div>
+                <Title level={4} className="brand-title">
+                  家族血亲管理
+                </Title>
+              </div>
+            )}
           </div>
           {navigationMenu}
         </Sider>
@@ -332,17 +344,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </Modal>
       <Drawer
         placement="left"
-        title="家族姓氏系统"
+        title="家族血亲管理"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         width={280}
         className="app-nav-drawer"
       >
         <div className="app-brand app-brand-drawer">
-          <Title level={4} className="brand-title">
-            家族姓氏系统
-          </Title>
-          <Text type="secondary">中国家族血亲关系管理</Text>
+          <div className="brand-main">
+            <div className="brand-stamp" aria-hidden="true">
+              家族
+              <br />
+              谱牒
+            </div>
+            <Title level={4} className="brand-title">
+              家族血亲管理
+            </Title>
+          </div>
         </div>
         {navigationMenu}
       </Drawer>

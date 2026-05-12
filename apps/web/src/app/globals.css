@@ -77,15 +77,44 @@ a {
 
 .app-brand {
   padding: 20px 16px 18px;
+  display: flex;
+  align-items: center;
 }
 
 .app-brand-drawer {
   padding: 0 0 18px;
 }
 
+.brand-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
 .brand-title {
   margin: 0 !important;
   color: var(--brand) !important;
+  white-space: nowrap;
+  line-height: 1.2 !important;
+}
+
+.brand-stamp {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  color: #a64637;
+  font-family: STKaiti, KaiTi, serif;
+  font-size: 10px;
+  line-height: 1.1;
+  text-align: center;
+  border: 2px solid #a64637;
+  border-radius: 2px;
+  background: rgba(166, 70, 55, 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .app-header {
@@ -954,6 +983,78 @@ a {
   gap: 6px;
 }
 
+.import-batch-drawer .ant-drawer-header {
+  border-bottom-color: rgba(234, 216, 189, 0.86) !important;
+}
+
+.import-batch-drawer .ant-drawer-body {
+  padding: 14px !important;
+  background: linear-gradient(180deg, rgba(255, 252, 247, 0.95), rgba(246, 236, 218, 0.72));
+}
+
+.import-batch-drawer-list .ant-list-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.import-batch-record-list-item {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+.import-batch-record-card {
+  border-radius: 16px !important;
+  border: 1px solid rgba(234, 216, 189, 0.95) !important;
+  background: linear-gradient(175deg, rgba(255, 250, 242, 0.98), rgba(247, 237, 221, 0.9)) !important;
+  box-shadow: var(--panel-shadow-soft);
+}
+
+.import-batch-record-card .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 14px 12px !important;
+}
+
+.import-batch-record-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.import-batch-record-member {
+  color: var(--brand-deep) !important;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.import-batch-record-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.import-batch-record-meta-line {
+  margin: 0 !important;
+  line-height: 1.6;
+}
+
+.import-batch-record-warning {
+  border-radius: 10px;
+  border: 1px solid rgba(217, 119, 6, 0.26);
+  background: rgba(255, 247, 223, 0.9);
+  padding: 8px 10px;
+}
+
+.import-batch-record-actions {
+  width: 100%;
+  margin-top: 2px;
+}
+
 .asset-library-header {
   display: flex;
   align-items: flex-start;
@@ -1011,16 +1112,44 @@ a {
 
 .asset-library-cover-doc {
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  gap: 18px;
+  padding: 26px 28px;
+}
+
+.asset-library-cover-doc .ant-avatar {
+  flex: 0 0 auto;
+}
+
+.asset-library-doc-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 12px;
-  padding: 20px;
+  min-width: 0;
 }
 
 .asset-library-doc-name {
-  text-align: center;
-  line-height: 1.5;
+  display: -webkit-box;
+  color: #4f2719 !important;
+  line-height: 1.55;
+  word-break: break-word;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.asset-library-doc-size {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(138, 112, 79, 0.12);
+  color: #7c6654 !important;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .asset-library-card-body {
@@ -1084,6 +1213,22 @@ a {
 .asset-library-compact .asset-library-cover .ant-image,
 .asset-library-compact .asset-library-cover .ant-image-img {
   height: 180px;
+}
+
+.asset-library-compact .asset-library-cover-doc {
+  gap: 14px;
+  padding: 22px 24px;
+}
+
+.asset-library-compact .asset-library-doc-info {
+  gap: 10px;
+}
+
+.asset-library-compact .asset-library-cover-doc .ant-avatar {
+  width: 60px !important;
+  height: 60px !important;
+  min-width: 60px;
+  font-size: 26px !important;
 }
 
 .asset-library-compact .asset-library-description {
@@ -2270,6 +2415,10 @@ a {
     min-height: auto;
   }
 
+  .import-batch-record-actions > * {
+    flex: 1 1 calc(50% - 8px);
+  }
+
   .mobile-stack {
     display: flex;
     flex-direction: column;
@@ -2360,6 +2509,10 @@ a {
   }
 
   .mobile-list-actions > * {
+    flex-basis: 100%;
+  }
+
+  .import-batch-record-actions > * {
     flex-basis: 100%;
   }
 
