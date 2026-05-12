@@ -18,3 +18,4 @@ api-dev.err.log
 api-dev.out.log
 dev.log
 dev.err.log
+.codex-logs

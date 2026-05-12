@@ -16,6 +16,8 @@
   --info: #3e6288;
   --danger: #9e2a2b;
   --font-sans: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-serif: 'Noto Serif SC', 'Noto Serif CJK SC', 'Source Han Serif SC', 'SimSun', '宋体', serif;
+  --font-brush: 'Ma Shan Zheng', 'STXingkai', '华文行楷', 'FZKai-Z03', cursive;
 }
 
 html,
@@ -24,7 +26,7 @@ body {
     radial-gradient(circle at top right, rgba(214, 180, 121, 0.18), transparent 34%),
     linear-gradient(180deg, #f7f1e7 0%, #f3ebdf 100%);
   color: var(--foreground);
-  font-family: var(--font-sans);
+  font-family: var(--font-serif);
   margin: 0;
   min-height: 100%;
 }
@@ -88,7 +90,7 @@ a {
 .brand-main {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
   flex-wrap: nowrap;
 }
@@ -98,23 +100,41 @@ a {
   color: var(--brand) !important;
   white-space: nowrap;
   line-height: 1.2 !important;
+  letter-spacing: 0.02em;
 }
 
 .brand-stamp {
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   flex: 0 0 auto;
-  color: #a64637;
-  font-family: STKaiti, KaiTi, serif;
+  color: #9d2f25;
+  font-family: var(--font-serif);
   font-size: 10px;
-  line-height: 1.1;
+  font-weight: 700;
+  line-height: 1.08;
   text-align: center;
-  border: 2px solid #a64637;
+  border: 3px solid #9d2f25;
   border-radius: 2px;
-  background: rgba(166, 70, 55, 0.04);
+  background: linear-gradient(180deg, rgba(166, 54, 39, 0.2), rgba(166, 54, 39, 0.08));
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  transform: rotate(-2.5deg);
+  box-shadow:
+    0 1px 0 rgba(157, 47, 37, 0.28),
+    0 2px 4px rgba(126, 40, 31, 0.2),
+    inset 0 0 0 1px rgba(157, 47, 37, 0.18);
+  text-shadow: 0 0 0.5px rgba(126, 40, 31, 0.35);
+}
+
+.brand-stamp::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border: 1px solid rgba(157, 47, 37, 0.62);
+  border-radius: 1px;
+  pointer-events: none;
 }
 
 .app-header {
@@ -1562,7 +1582,7 @@ a {
   grid-template-columns: repeat(2, auto);
   gap: 16px 24px;
   color: rgba(42, 12, 8, 0.24);
-  font-family: STKaiti, KaiTi, 'Noto Serif SC', serif;
+  font-family: var(--font-serif);
   font-size: 30px;
   writing-mode: vertical-rl;
 }
@@ -1571,7 +1591,7 @@ a {
   max-width: 560px;
   margin: clamp(18px, 3vh, 28px) 0 clamp(10px, 2vh, 18px);
   color: #f7dfb6;
-  font-family: STXingkai, '华文行楷', 'FZKai-Z03', STKaiti, KaiTi, 'Noto Serif SC', serif;
+  font-family: var(--font-brush);
   font-size: clamp(46px, min(5.1vw, 7vh), 76px);
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -1608,7 +1628,7 @@ a {
   display: block;
   margin-bottom: 2px;
   color: #ffe3aa;
-  font-family: STKaiti, KaiTi, 'Noto Serif SC', serif;
+  font-family: var(--font-serif);
   font-size: clamp(17px, min(1.8vw, 2.5vh), 22px);
   font-weight: 800;
   line-height: 1.35;
@@ -1619,6 +1639,7 @@ a {
 .login-hero-text {
   display: block;
   color: rgba(255, 247, 233, 0.9);
+  font-family: var(--font-sans);
   font-size: clamp(13px, min(1.15vw, 1.9vh), 16px);
   font-weight: 500;
   line-height: 1.75;
@@ -1705,6 +1726,7 @@ a {
   display: block;
   margin-bottom: 6px;
   color: #fff3dd !important;
+  font-family: var(--font-sans);
   font-size: 18px;
   font-weight: 700;
 }
@@ -1712,6 +1734,7 @@ a {
 .login-feature-desc {
   margin: 0 !important;
   color: rgba(255, 241, 215, 0.82) !important;
+  font-family: var(--font-sans);
   line-height: 1.62;
 }
 
@@ -1789,27 +1812,30 @@ a {
   opacity: 0.72;
 }
 
-.login-form-panel::after {
+.login-cloud-art {
   position: absolute;
-  top: clamp(6px, 2vh, 24px);
-  right: clamp(-18px, -1vw, 4px);
+  top: clamp(10px, 2.2vh, 28px);
+  right: clamp(-20px, -1.2vw, 2px);
   z-index: 0;
-  width: min(340px, 44%);
-  height: min(190px, 28%);
+  width: min(360px, 46%);
+  height: min(212px, 31%);
+  display: block;
   pointer-events: none;
-  content: '';
   background:
-    radial-gradient(ellipse at 36% 30%, transparent 0 39%, rgba(211, 169, 102, 0.14) 40% 42%, transparent 43%),
-    radial-gradient(ellipse at 54% 24%, transparent 0 42%, rgba(211, 169, 102, 0.13) 43% 45%, transparent 46%),
-    radial-gradient(ellipse at 72% 32%, transparent 0 36%, rgba(211, 169, 102, 0.13) 37% 39%, transparent 40%),
-    radial-gradient(ellipse at 50% 61%, transparent 0 39%, rgba(211, 169, 102, 0.11) 40% 42%, transparent 43%),
-    radial-gradient(ellipse at 78% 66%, transparent 0 34%, rgba(211, 169, 102, 0.11) 35% 37%, transparent 38%),
-    linear-gradient(110deg, transparent 4%, rgba(211, 169, 102, 0.12) 5% 6%, transparent 7% 100%),
-    linear-gradient(150deg, transparent 34%, rgba(211, 169, 102, 0.1) 35% 36%, transparent 37% 100%);
-  opacity: 0.6;
-  filter: blur(0.2px);
-  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 16%, #000 86%, transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0%, #000 16%, #000 86%, transparent 100%);
+    linear-gradient(118deg, rgba(216, 170, 103, 0.2), rgba(216, 170, 103, 0.06) 38%, rgba(100, 66, 41, 0.14)),
+    url('/xiangyun.jpg') center / cover no-repeat;
+  opacity: 0.72;
+  filter: sepia(0.22) saturate(0.8) contrast(0.92) brightness(0.96);
+  transform: rotate(2deg);
+  transform-origin: 88% 12%;
+  -webkit-mask-image:
+    linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.34) 12%, #000 30%, #000 82%, rgba(0, 0, 0, 0.46) 92%, transparent 100%),
+    linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.3) 16%, #000 34%, #000 78%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.34) 12%, #000 30%, #000 82%, rgba(0, 0, 0, 0.46) 92%, transparent 100%),
+    linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.3) 16%, #000 34%, #000 78%, transparent 100%);
+  mask-composite: intersect;
 }
 
 .login-form-frame {
@@ -1849,12 +1875,13 @@ a {
 
 .login-corner {
   position: absolute;
-  --corner-gold: rgba(202, 156, 88, 0.6);
-  --corner-gold-soft: rgba(202, 156, 88, 0.26);
+  --silk-gold: #d4a84b;
+  --silk-gold-mid: rgba(196, 152, 75, 0.72);
+  --silk-gold-soft: rgba(196, 152, 75, 0.35);
+  --silk-gold-dim: rgba(180, 135, 58, 0.18);
   z-index: 2;
-  width: 48px;
-  height: 48px;
-  opacity: 0.72;
+  width: 56px;
+  height: 56px;
   pointer-events: none;
 }
 
@@ -1864,45 +1891,60 @@ a {
   content: '';
 }
 
+/* 外层：金丝L形框架，细线模拟丝线 */
 .login-corner::before {
-  inset: 0;
-  border-top: 2px solid var(--corner-gold);
-  border-left: 2px solid var(--corner-gold);
+  inset: 4px;
+  border-top: 1.5px solid var(--silk-gold-mid);
+  border-left: 1.5px solid var(--silk-gold-mid);
+  border-radius: 1px 0 0 0;
+  box-shadow:
+    inset 1.5px 1.5px 0 var(--silk-gold-dim);
 }
 
+/* 内层：中国结编织纹样 */
 .login-corner::after {
-  inset: 6px;
+  inset: 10px;
   background:
-    linear-gradient(var(--corner-gold) 0 0) 0 0 / 28px 2px no-repeat,
-    linear-gradient(var(--corner-gold) 0 0) 0 0 / 2px 28px no-repeat,
-    linear-gradient(var(--corner-gold-soft) 0 0) 8px 8px / 22px 2px no-repeat,
-    linear-gradient(var(--corner-gold-soft) 0 0) 8px 8px / 2px 22px no-repeat,
-    linear-gradient(var(--corner-gold) 0 0) 16px 16px / 14px 2px no-repeat,
-    linear-gradient(var(--corner-gold) 0 0) 16px 16px / 2px 14px no-repeat,
-    linear-gradient(var(--corner-gold-soft) 0 0) 24px 24px / 8px 2px no-repeat,
-    linear-gradient(var(--corner-gold-soft) 0 0) 24px 24px / 2px 8px no-repeat;
+    /* 中层丝线L形 */
+    linear-gradient(var(--silk-gold-soft) 0 0) 0 0 / 22px 1px no-repeat,
+    linear-gradient(var(--silk-gold-soft) 0 0) 0 0 / 1px 22px no-repeat,
+    /* 结心菱形 - 四根斜线交织 */
+    linear-gradient(135deg, transparent 47%, var(--silk-gold-mid) 47%, var(--silk-gold-mid) 53%, transparent 53%) 8px 8px / 14px 14px no-repeat,
+    linear-gradient(45deg, transparent 47%, var(--silk-gold-soft) 47%, var(--silk-gold-soft) 53%, transparent 53%) 8px 8px / 14px 14px no-repeat,
+    /* 菱形外框 */
+    linear-gradient(var(--silk-gold-soft) 0 0) 9px 16px / 12px 1px no-repeat,
+    linear-gradient(var(--silk-gold-soft) 0 0) 16px 9px / 1px 12px no-repeat,
+    /* 结心丝线小勾 */
+    linear-gradient(var(--silk-gold-mid) 0 0) 17px 17px / 8px 1px no-repeat,
+    linear-gradient(var(--silk-gold-mid) 0 0) 17px 17px / 1px 8px no-repeat,
+    /* 丝线结珠 - 交织点金珠 */
+    radial-gradient(circle at 19px 7px, var(--silk-gold) 1.8px, transparent 2.5px),
+    radial-gradient(circle at 7px 19px, var(--silk-gold) 1.8px, transparent 2.5px),
+    radial-gradient(circle at 23px 23px, var(--silk-gold) 2px, transparent 2.8px),
+    /* 菱形顶点小金珠 */
+    radial-gradient(circle at 15px 15px, var(--silk-gold) 1.5px, transparent 2px);
 }
 
 .login-corner-tl {
-  top: -1px;
-  left: -1px;
+  top: 0;
+  left: 0;
 }
 
 .login-corner-tr {
-  top: -1px;
-  right: -1px;
+  top: 0;
+  right: 0;
   transform: scaleX(-1);
 }
 
 .login-corner-bl {
-  bottom: -1px;
-  left: -1px;
+  bottom: 0;
+  left: 0;
   transform: scaleY(-1);
 }
 
 .login-corner-br {
-  right: -1px;
-  bottom: -1px;
+  right: 0;
+  bottom: 0;
   transform: scale(-1);
 }
 
@@ -1917,7 +1959,7 @@ a {
 .login-form-heading h2 {
   margin: 0;
   color: #2f1b14;
-  font-family: STKaiti, KaiTi, 'Noto Serif SC', serif;
+  font-family: var(--font-brush);
   font-size: clamp(32px, min(4vw, 5vh), 44px);
   font-weight: 800;
   letter-spacing: 0.22em;
@@ -1925,40 +1967,38 @@ a {
 
 .login-heading-rule {
   position: relative;
-  width: min(340px, 82%);
-  height: 1px;
+  width: min(420px, 90%);
+  height: 18px;
   margin: clamp(14px, 2vh, 20px) 0 clamp(12px, 2vh, 18px);
-  background: linear-gradient(90deg, transparent, rgba(165, 76, 54, 0.64), transparent);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 28' fill='none' stroke='%23a54c36' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M32 14c6-8 14-8 20 0c-6 8-14 8-20 0Z'/%3E%3Cpath d='M68 14c6-8 14-8 20 0c-6 8-14 8-20 0Z'/%3E%3Cpath d='M60 8l6 6-6 6-6-6 6-6Z'/%3E%3Cpath d='M56 22l4-4 4 4'/%3E%3Cpath d='M56 6l4 4 4-4'/%3E%3C/svg%3E")
+      center / 78px 16px no-repeat;
+}
+
+.login-heading-rule::before,
+.login-heading-rule::after {
+  position: absolute;
+  top: 50%;
+  height: 1px;
+  content: '';
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, rgba(165, 76, 54, 0.04), rgba(165, 76, 54, 0.3));
 }
 
 .login-heading-rule::before {
-  position: absolute;
-  left: 50%;
-  top: -5px;
-  width: 10px;
-  height: 10px;
-  content: '';
-  border: 1px solid rgba(165, 76, 54, 0.78);
-  background: rgba(255, 250, 242, 0.92);
-  transform: translateX(-50%) rotate(45deg);
+  left: 0;
+  width: calc(50% - 44px);
 }
 
 .login-heading-rule::after {
-  position: absolute;
-  left: 50%;
-  top: -7px;
-  width: 54px;
-  height: 14px;
-  content: '';
-  background:
-    linear-gradient(45deg, transparent 39%, rgba(165, 76, 54, 0.68) 40% 48%, transparent 49%) 6px 4px / 12px 8px no-repeat,
-    linear-gradient(-45deg, transparent 39%, rgba(165, 76, 54, 0.68) 40% 48%, transparent 49%) 36px 4px / 12px 8px no-repeat,
-    radial-gradient(circle, rgba(165, 76, 54, 0.72) 0 2px, transparent 2.5px) 0 4px / 12px 8px repeat-x;
-  transform: translateX(-50%);
+  right: 0;
+  width: calc(50% - 44px);
+  background: linear-gradient(90deg, rgba(165, 76, 54, 0.3), rgba(165, 76, 54, 0.04));
 }
 
 .login-form-subtitle {
   color: #8f7c68 !important;
+  font-family: var(--font-sans);
   line-height: 1.7;
 }
 
@@ -1979,18 +2019,7 @@ a {
 }
 
 .login-demo-box::after {
-  position: absolute;
-  right: 12px;
-  bottom: 0;
-  width: 118px;
-  height: 78px;
-  content: '';
-  background:
-    linear-gradient(180deg, transparent 22%, rgba(115, 95, 73, 0.12) 23% 26%, transparent 27%),
-    linear-gradient(135deg, transparent 36%, rgba(115, 95, 73, 0.12) 37% 41%, transparent 42%),
-    linear-gradient(45deg, transparent 39%, rgba(115, 95, 73, 0.12) 40% 44%, transparent 45%);
-  clip-path: polygon(0 100%, 15% 62%, 32% 72%, 50% 34%, 67% 61%, 80% 20%, 100% 100%);
-  opacity: 0.8;
+  content: none;
 }
 
 .login-demo-icon {
@@ -2007,6 +2036,7 @@ a {
   display: block;
   margin-bottom: 6px;
   color: #43261b !important;
+  font-family: var(--font-sans);
   font-size: 17px;
   font-weight: 700;
 }
@@ -2016,6 +2046,7 @@ a {
   z-index: 1;
   margin: 4px 0 0;
   color: #6a4735;
+  font-family: var(--font-sans);
   font-size: 15px;
   line-height: 1.45;
 }
@@ -2027,6 +2058,7 @@ a {
 .login-form .ant-form-item-label > label {
   color: #714d35;
   font-weight: 600;
+  font-family: var(--font-sans);
 }
 
 .login-page :where(.ant-input-affix-wrapper) {
@@ -2068,6 +2100,7 @@ a {
   padding: 0;
   color: #6d4b35;
   font: inherit;
+  font-family: var(--font-sans);
   background: transparent;
   border: 0;
   cursor: pointer;
@@ -2077,27 +2110,96 @@ a {
   color: #9a2d27;
 }
 
-.login-page :where(.ant-btn-primary) {
+/* ---- 中国结四角内嵌按钮 ---- */
+.login-btn-knot-wrap {
+  position: relative;
+  margin: 4px 0;
+  line-height: 0;
+}
+
+.login-btn-knot {
+  position: absolute;
+  z-index: 3;
+  width: 28px;
+  height: 28px;
+  pointer-events: none;
+  --knot-red: #d4a017;
+  --knot-gold: rgba(238, 203, 119, 0.9);
+  --knot-gold-light: rgba(238, 203, 119, 0.5);
+}
+
+/* 中国结角饰 - 从按钮内角向内延伸的L形回纹 */
+.login-btn-knot::before {
+  position: absolute;
+  content: '';
+  inset: 0;
+  border-top: 2px solid var(--knot-gold);
+  border-left: 2px solid var(--knot-gold);
+  border-radius: 2px 0 0 0;
+}
+
+.login-btn-knot::after {
+  position: absolute;
+  content: '';
+  inset: 4px;
+  background:
+    /* 中层回纹 */
+    linear-gradient(var(--knot-gold-light) 0 0) 0 0 / 12px 1.5px no-repeat,
+    linear-gradient(var(--knot-gold-light) 0 0) 0 0 / 1.5px 12px no-repeat,
+    /* 内层小勾 */
+    linear-gradient(var(--knot-gold) 0 0) 8px 8px / 7px 1.5px no-repeat,
+    linear-gradient(var(--knot-gold) 0 0) 8px 8px / 1.5px 7px no-repeat,
+    /* 结心小金点 */
+    radial-gradient(circle at 14px 4px, var(--knot-red) 2px, transparent 2.5px),
+    radial-gradient(circle at 4px 14px, var(--knot-red) 2px, transparent 2.5px),
+    radial-gradient(circle at 12px 12px, var(--knot-gold) 1.5px, transparent 2px);
+}
+
+/* 四角定位 - 嵌入按钮内侧 */
+.login-btn-knot-tl { top: 2px; left: 2px; }
+.login-btn-knot-tr { top: 2px; right: 2px; transform: scaleX(-1); }
+.login-btn-knot-bl { bottom: 2px; left: 2px; transform: scaleY(-1); }
+.login-btn-knot-br { bottom: 2px; right: 2px; transform: scale(-1); }
+
+/* 按钮本体 */
+.login-btn-knot-wrap .ant-btn-primary {
+  position: relative;
   height: clamp(48px, 6vh, 52px);
   border-color: #8f2724;
   border-radius: 4px;
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.05), transparent 18%, transparent 82%, rgba(255, 255, 255, 0.05)),
-    linear-gradient(180deg, #b33731 0%, #8f2724 100%);
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06), transparent 20%, transparent 80%, rgba(255, 255, 255, 0.06)),
+    linear-gradient(180deg, #c43d36 0%, #952620 60%, #7d1f19 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 228, 193, 0.24),
-    0 12px 24px rgba(120, 37, 31, 0.22);
-  font-size: 18px;
+    inset 0 1px 0 rgba(255, 228, 193, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+    0 12px 28px rgba(120, 37, 31, 0.26);
+  font-family: var(--font-sans);
+  font-size: 19px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.18em;
+  transition: all 0.25s ease;
 }
 
-.login-page :where(.ant-btn-primary:hover),
-.login-page :where(.ant-btn-primary:focus-visible) {
+.login-btn-knot-wrap .ant-btn-primary:hover,
+.login-btn-knot-wrap .ant-btn-primary:focus-visible {
   border-color: #a7312c !important;
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.08), transparent 18%, transparent 82%, rgba(255, 255, 255, 0.08)),
-    linear-gradient(180deg, #c1423a 0%, #962b26 100%) !important;
+    linear-gradient(90deg, rgba(255, 255, 255, 0.1), transparent 20%, transparent 80%, rgba(255, 255, 255, 0.1)),
+    linear-gradient(180deg, #d64a42 0%, #a42d27 60%, #8b221c 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 228, 193, 0.34),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.14),
+    0 16px 36px rgba(120, 37, 31, 0.34) !important;
+  transform: translateY(-1px);
+}
+
+.login-btn-knot-wrap .ant-btn-primary:active {
+  transform: translateY(0);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 228, 193, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.1),
+    0 6px 14px rgba(120, 37, 31, 0.18) !important;
 }
 
 .login-form-footer {
@@ -2129,7 +2231,7 @@ a {
   height: 38px;
   margin: clamp(12px, 2vh, 18px) auto 0;
   color: #a64637;
-  font-family: STKaiti, KaiTi, serif;
+  font-family: var(--font-serif);
   font-size: 13px;
   line-height: 1.15;
   text-align: center;

@@ -2,7 +2,7 @@
 
 import { LinkOutlined, PlusOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { App, Button, Card, Form, Input, Modal, Select, Space, Table, Typography } from 'antd';
+import { App, Button, Card, Form, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { AuthGuard } from '@/components/auth-guard';
 import { api, ApiError } from '@/lib/api';
@@ -126,7 +126,12 @@ export default function UsersPage() {
               {
                 title: '状态',
                 dataIndex: 'status',
-                render: (value: string) => (value === 'ACTIVE' ? '启用' : '禁用'),
+                render: (value: string) => {
+                  const label = value === 'ACTIVE' ? '启用' : value === 'DISABLED' ? '禁用' : value;
+                  const color = value === 'ACTIVE' ? 'success' : value === 'DISABLED' ? 'error' : 'default';
+
+                  return <Tag color={color}>{label}</Tag>;
+                },
               },
               {
                 title: '最近登录',

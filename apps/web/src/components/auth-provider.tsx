@@ -9,6 +9,7 @@ import {
   useMemo,
   useState,
 } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, getRuntimeAccessToken, setRuntimeAccessToken } from '@/lib/api';
 import type { AuthUser } from '@/lib/types';
 
@@ -70,6 +71,7 @@ function persistAuthSession(session: PersistedAuthSession | null) {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(() => readPersistedAuthSession()?.user ?? null);
   const [initialized, setInitialized] = useState(false);
@@ -203,7 +205,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       accessToken: nextSession.accessToken,
       user: nextSession.user,
     });
-  }, []);
+    await Promise.all([
+      queryClient.invalidateQueries(),
+      queryClient.refetchQueries({ type: 'active' }),
+    ]);
+  }, [queryClient]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

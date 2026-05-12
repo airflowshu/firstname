@@ -80,6 +80,7 @@ export class DashboardService {
             select: {
               id: true,
               username: true,
+              displayName: true,
               role: true,
             },
           },

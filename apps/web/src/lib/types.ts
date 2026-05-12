@@ -514,6 +514,7 @@ export interface AuditLogRecord {
   operator: {
     id: string;
     username: string;
+    displayName?: string | null;
     role: UserRole;
   } | null;
 }

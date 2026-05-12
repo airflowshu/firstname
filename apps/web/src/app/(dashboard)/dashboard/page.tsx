@@ -3,11 +3,37 @@
 import { ClockCircleOutlined, TeamOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { Card, Col, List, Row, Space, Statistic, Table, Tag, Typography } from 'antd';
+import type { ReactNode } from 'react';
 import { AuthGuard } from '@/components/auth-guard';
 import { api } from '@/lib/api';
+import { getAuditDetailView } from '@/lib/audit-log-detail-display';
+import {
+  getAuditActionLabel,
+  getAuditOperatorName,
+  getAuditTargetDisplay,
+  getAuditTargetTypeLabel,
+} from '@/lib/audit-log-display';
 import { formatDate } from '@/lib/format';
+import type { AuditLogRecord } from '@/lib/types';
 
 const { Text, Title } = Typography;
+
+function renderDashboardAuditDetail(record: AuditLogRecord): ReactNode {
+  const { detail, badges } = getAuditDetailView(record, 'compact');
+  if (badges.length === 0) {
+    return detail;
+  }
+  return (
+    <Space size={[6, 6]} wrap>
+      {badges.map((badge) => (
+        <Tag key={`${record.id}-${badge.key}`} color={badge.color}>
+          {badge.label}
+        </Tag>
+      ))}
+      {detail !== '-' ? <span>{detail}</span> : null}
+    </Space>
+  );
+}
 
 export default function DashboardPage() {
   const summaryQuery = useQuery({
@@ -89,15 +115,25 @@ export default function DashboardPage() {
                   },
                   {
                     title: '操作人',
-                    dataIndex: ['operator', 'username'],
-                    render: (value?: string) => value ?? '-',
+                    render: (_: unknown, record) => getAuditOperatorName(record),
                   },
-                  { title: '动作', dataIndex: 'action' },
-                  { title: '对象', dataIndex: 'targetType' },
                   {
-                    title: '目标ID',
-                    dataIndex: 'targetId',
-                    render: (value?: string | null) => value ?? '-',
+                    title: '动作',
+                    dataIndex: 'action',
+                    render: (value: string) => getAuditActionLabel(value),
+                  },
+                  {
+                    title: '对象',
+                    dataIndex: 'targetType',
+                    render: (value: string) => getAuditTargetTypeLabel(value),
+                  },
+                  {
+                    title: '目标对象',
+                    render: (_: unknown, record) => getAuditTargetDisplay(record),
+                  },
+                  {
+                    title: '操作详情',
+                    render: (_: unknown, record: AuditLogRecord) => renderDashboardAuditDetail(record),
                   },
                 ]}
               />

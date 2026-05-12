@@ -14,9 +14,21 @@ export class AuditLogsService {
             { targetId: { contains: keyword, mode: 'insensitive' } },
             {
               operator: {
-                username: {
-                  contains: keyword,
-                  mode: 'insensitive',
+                is: {
+                  OR: [
+                    {
+                      username: {
+                        contains: keyword,
+                        mode: 'insensitive',
+                      },
+                    },
+                    {
+                      displayName: {
+                        contains: keyword,
+                        mode: 'insensitive',
+                      },
+                    },
+                  ],
                 },
               },
             },
@@ -33,6 +45,7 @@ export class AuditLogsService {
             select: {
               id: true,
               username: true,
+              displayName: true,
               role: true,
             },
           },

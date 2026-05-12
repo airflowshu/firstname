@@ -1,12 +1,24 @@
 import { AntdRegistry } from '@ant-design/nextjs-registry';
 import type { Metadata } from 'next';
-import { Noto_Sans_SC } from 'next/font/google';
+import { Ma_Shan_Zheng, Noto_Sans_SC, Noto_Serif_SC } from 'next/font/google';
 import { Providers } from '@/components/providers';
 import './globals.css';
 
 const notoSansSc = Noto_Sans_SC({
   variable: '--font-sans',
   subsets: ['latin'],
+});
+
+const notoSerifSc = Noto_Serif_SC({
+  variable: '--font-serif',
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '900'],
+});
+
+const maShanZheng = Ma_Shan_Zheng({
+  variable: '--font-brush',
+  subsets: ['latin'],
+  weight: '400',
 });
 
 export const metadata: Metadata = {
@@ -21,7 +33,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN" suppressHydrationWarning>
-      <body className={notoSansSc.variable}>
+      <body className={`${notoSansSc.variable} ${notoSerifSc.variable} ${maShanZheng.variable}`}>
         <AntdRegistry>
           <Providers>{children}</Providers>
         </AntdRegistry>
