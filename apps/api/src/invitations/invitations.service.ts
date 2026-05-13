@@ -9,6 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import {
   AuditAction,
+  FamilyType,
   FamilyStatus,
   InvitationType,
   MembershipStatus,
@@ -432,10 +433,10 @@ export class InvitationsService {
   }
 
   private async findSettingsTemplateFamilyId(tx: Prisma.TransactionClient, targetFamilyId: string) {
-    const defaultFamily = await tx.family.findFirst({
+    const templateFamily = await tx.family.findFirst({
       where: {
         id: { not: targetFamilyId },
-        name: '默认家族',
+        familyType: FamilyType.TEMPLATE,
       },
       orderBy: { createdAt: 'asc' },
       select: {
@@ -450,26 +451,11 @@ export class InvitationsService {
       },
     });
 
-    if (defaultFamily && this.hasSettings(defaultFamily._count)) {
-      return defaultFamily.id;
+    if (!templateFamily || !this.hasSettings(templateFamily._count)) {
+      return undefined;
     }
 
-    const templateFamily = await tx.family.findFirst({
-      where: {
-        id: { not: targetFamilyId },
-        OR: [
-          { kinshipAliases: { some: {} } },
-          { assetTags: { some: {} } },
-          { assetSources: { some: {} } },
-        ],
-      },
-      orderBy: { createdAt: 'asc' },
-      select: {
-        id: true,
-      },
-    });
-
-    return templateFamily?.id;
+    return templateFamily.id;
   }
 
   private hasSettings(counts: { kinshipAliases: number; assetTags: number; assetSources: number }) {

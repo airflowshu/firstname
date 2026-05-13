@@ -2,6 +2,7 @@ export type UserRole = 'ADMIN' | 'VIEWER';
 export type PlatformRole = 'SUPER' | 'USER';
 export type UserStatus = 'ACTIVE' | 'DISABLED';
 export type FamilyStatus = 'ACTIVE' | 'DISABLED';
+export type FamilyType = 'STANDARD' | 'DEMO' | 'TEMPLATE';
 export type Gender = 'MALE' | 'FEMALE' | 'UNKNOWN';
 export type LifeStatus = 'ALIVE' | 'DECEASED' | 'UNKNOWN';
 export type MarriageStatus = 'ACTIVE' | 'DIVORCED' | 'WIDOWED';
@@ -63,10 +64,55 @@ export interface PlatformFamilyRecord {
   id: string;
   name: string;
   status: FamilyStatus;
+  familyType: FamilyType;
+  resetTemplateKey?: string | null;
+  canResetDemoData: boolean;
   createdAt: string;
   updatedAt: string;
   membershipCount: number;
   memberCount: number;
+}
+
+export interface DemoResetPreviewResponse {
+  familyId: string;
+  familyName: string;
+  familyType: FamilyType;
+  templateKey: string;
+  confirmationText: string;
+  counts: {
+    members: number;
+    marriages: number;
+    customEvents: number;
+    assets: number;
+    invitations: number;
+    supplementRequests: number;
+    systemAccounts: number;
+  };
+  warnings: string[];
+}
+
+export interface DemoResetResult {
+  success: true;
+  familyId: string;
+  familyName: string;
+  templateKey: string;
+  resetAt: string;
+  summary: {
+    cleared: DemoResetPreviewResponse['counts'];
+    recreated: {
+      members: number;
+      marriages: number;
+      customEvents: number;
+      assets: number;
+      systemAccounts: number;
+      kinshipAliases: number;
+      assetTags: number;
+      assetSources: number;
+    };
+    removedMemberships: number;
+    resetUsers: string[];
+    deletedFileCount: number;
+  };
 }
 
 export interface InvitationResult {

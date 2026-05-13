@@ -9,6 +9,8 @@ import type {
   AssetImportPrecheckResult,
   AuthUser,
   DashboardSummary,
+  DemoResetPreviewResponse,
+  DemoResetResult,
   DuplicateMemberCheckResult,
   GraphData,
   KinshipAlias,
@@ -302,6 +304,15 @@ export const api = {
       body: JSON.stringify(payload ?? {}),
     }),
   getPlatformFamilies: () => request<PlatformFamilyRecord[]>('/platform/families'),
+  getDemoResetPreview: (familyId: string) =>
+    request<DemoResetPreviewResponse>(
+      `/platform/families/${encodeURIComponent(familyId)}/demo-reset-preview`,
+    ),
+  resetDemoFamily: (familyId: string, payload: { confirmationText: string }) =>
+    request<DemoResetResult>(`/platform/families/${encodeURIComponent(familyId)}/demo-reset`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   getDashboardSummary: () => request<DashboardSummary>('/dashboard/summary'),
   getMembers: (params: Record<string, string | number | boolean | undefined>) => {
     const search = new URLSearchParams();

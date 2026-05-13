@@ -27,6 +27,12 @@ enum FamilyStatus {
   DISABLED
 }
 
+enum FamilyType {
+  STANDARD
+  DEMO
+  TEMPLATE
+}
+
 enum MembershipStatus {
   ACTIVE
   DISABLED
@@ -93,6 +99,7 @@ model User {
   reviewedSupplementRequests  SupplementRequest[] @relation("SupplementReviewer")
   uploadedMemberAssets        MemberAsset[]
   createdMemberEvents         MemberEvent[]
+  demoResetHistories          DemoResetHistory[]
 
   @@index([refreshTokenHash])
   @@index([lastActiveFamilyId])
@@ -102,6 +109,8 @@ model Family {
   id                 String                   @id @default(cuid())
   name               String
   status             FamilyStatus             @default(ACTIVE)
+  familyType         FamilyType               @default(STANDARD)
+  resetTemplateKey   String?
   createdById        String?
   createdAt          DateTime                 @default(now())
   updatedAt          DateTime                 @updatedAt
@@ -119,9 +128,12 @@ model Family {
   requestAssets      SupplementRequestAsset[]
   kinshipAliases     KinshipAlias[]
   auditLogs          AuditLog[]
+  demoResetHistories DemoResetHistory[]
 
   @@index([status])
+  @@index([familyType])
   @@index([createdById])
+  @@index([resetTemplateKey])
 }
 
 model FamilyMembership {
@@ -442,5 +454,22 @@ model AuditLog {
   @@index([familyId])
   @@index([operatorId])
   @@index([targetType, targetId])
+  @@index([createdAt])
+}
+
+model DemoResetHistory {
+  id                 String   @id @default(cuid())
+  familyId           String
+  familyNameSnapshot String
+  templateKey        String
+  operatorId         String?
+  summary            Json
+  createdAt          DateTime @default(now())
+  family             Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  operator           User?    @relation(fields: [operatorId], references: [id], onDelete: SetNull)
+
+  @@index([familyId])
+  @@index([operatorId])
+  @@index([templateKey])
   @@index([createdAt])
 }
