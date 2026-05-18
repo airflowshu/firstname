@@ -43,6 +43,7 @@ import { MarriageFormModal } from '@/components/marriage-form-modal';
 import { MemberAssetModal } from '@/components/member-asset-modal';
 import { MemberEventModal } from '@/components/member-event-modal';
 import { MemberFormModal } from '@/components/member-form-modal';
+import { CemeteryMapPreview } from '@/components/cemetery-map-preview';
 import { SupplementAssetRequestModal } from '@/components/supplement-asset-request-modal';
 import { SupplementRequestModal } from '@/components/supplement-request-modal';
 import { useAuth } from '@/components/auth-provider';
@@ -196,6 +197,18 @@ export default function MemberDetailPage() {
     member?.marriages.filter((marriage) => marriage.status === 'ACTIVE').map((marriage) => marriage.spouse) ??
     [];
   const onlyActiveSpouse = activeSpouses.length === 1 ? activeSpouses[0] : null;
+  const hasCemeteryCoordinates =
+    member?.cemeteryLatitude !== null &&
+    member?.cemeteryLatitude !== undefined &&
+    member?.cemeteryLongitude !== null &&
+    member?.cemeteryLongitude !== undefined;
+  const hasCemeteryInfo = Boolean(
+    hasCemeteryCoordinates ||
+      member?.cemeteryName ||
+      member?.cemeteryAddress ||
+      member?.cemeteryPoiId ||
+      member?.cemeteryRemark,
+  );
 
   const saveMemberMutation = useMutation<unknown, Error, Record<string, unknown>>({
     mutationFn: (payload: Record<string, unknown>) =>
@@ -914,36 +927,62 @@ export default function MemberDetailPage() {
                     {isMemberPending ? (
                       <Skeleton active paragraph={{ rows: 4 }} />
                     ) : member ? (
-                      <Descriptions column={{ xs: 1, md: 2, xl: 3 }}>
-                        <Descriptions.Item label="出生日期">
-                          {formatDate(member.birthDate)}
-                        </Descriptions.Item>
-                        {member.lifeStatus === 'ALIVE' ? null : (
-                          <Descriptions.Item label="去世日期">
-                            {formatDate(member.deathDate)}
+                      <div className={hasCemeteryCoordinates ? 'member-overview-base-grid' : undefined}>
+                        <Descriptions
+                          column={{ xs: 1, md: 2, xl: hasCemeteryCoordinates ? 2 : 3 }}
+                          className="member-overview-base-descriptions"
+                        >
+                          <Descriptions.Item label="出生日期">
+                            {formatDate(member.birthDate)}
                           </Descriptions.Item>
-                        )}
-                        <Descriptions.Item label="生命状态">
-                          {member.lifeStatus === 'ALIVE'
-                            ? '在世'
-                            : member.lifeStatus === 'DECEASED'
-                              ? '已故'
-                              : '未知'}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="父亲">{member.father?.name ?? '-'}</Descriptions.Item>
-                        <Descriptions.Item label="母亲">{member.mother?.name ?? '-'}</Descriptions.Item>
-                        <Descriptions.Item label="排行">{member.birthOrder ?? '-'}</Descriptions.Item>
-                        <Descriptions.Item label="籍贯">{member.nativePlace ?? '-'}</Descriptions.Item>
-                        <Descriptions.Item label="创建时间">
-                          {formatDate(member.createdAt, 'YYYY-MM-DD HH:mm')}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="更新时间">
-                          {formatDate(member.updatedAt, 'YYYY-MM-DD HH:mm')}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="备注" span="filled">
-                          {member.notes ?? '暂无备注'}
-                        </Descriptions.Item>
-                      </Descriptions>
+                          {member.lifeStatus === 'ALIVE' ? null : (
+                            <Descriptions.Item label="去世日期">
+                              {formatDate(member.deathDate)}
+                            </Descriptions.Item>
+                          )}
+                          <Descriptions.Item label="生命状态">
+                            {member.lifeStatus === 'ALIVE'
+                              ? '在世'
+                              : member.lifeStatus === 'DECEASED'
+                                ? '已故'
+                                : '未知'}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="父亲">{member.father?.name ?? '-'}</Descriptions.Item>
+                          <Descriptions.Item label="母亲">{member.mother?.name ?? '-'}</Descriptions.Item>
+                          <Descriptions.Item label="排行">{member.birthOrder ?? '-'}</Descriptions.Item>
+                          <Descriptions.Item label="籍贯">{member.nativePlace ?? '-'}</Descriptions.Item>
+                          {hasCemeteryInfo ? (
+                            <Descriptions.Item label="墓地名称">
+                              {member.cemeteryName ?? '-'}
+                            </Descriptions.Item>
+                          ) : null}
+                          {hasCemeteryInfo ? (
+                            <Descriptions.Item label="墓地地址">
+                              {member.cemeteryAddress ?? '-'}
+                            </Descriptions.Item>
+                          ) : null}
+                          {hasCemeteryCoordinates ? (
+                            <Descriptions.Item label="墓地坐标">
+                              {member.cemeteryLatitude?.toFixed(6)}, {member.cemeteryLongitude?.toFixed(6)}
+                            </Descriptions.Item>
+                          ) : null}
+                          {hasCemeteryInfo ? (
+                            <Descriptions.Item label="墓地备注">
+                              {member.cemeteryRemark ?? '-'}
+                            </Descriptions.Item>
+                          ) : null}
+                          <Descriptions.Item label="创建时间">
+                            {formatDate(member.createdAt, 'YYYY-MM-DD HH:mm')}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="更新时间">
+                            {formatDate(member.updatedAt, 'YYYY-MM-DD HH:mm')}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="备注" span="filled">
+                            {member.notes ?? '暂无备注'}
+                          </Descriptions.Item>
+                        </Descriptions>
+                        {hasCemeteryInfo ? <CemeteryMapPreview value={member} /> : null}
+                      </div>
                     ) : null}
                   </Card>
                 </div>

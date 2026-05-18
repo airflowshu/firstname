@@ -40,6 +40,14 @@ const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
   allowedDevOrigins: buildAllowedDevOrigins(),
+  env: {
+    NEXT_PUBLIC_AMAP_KEY:
+      process.env.NEXT_PUBLIC_AMAP_KEY ?? readRootEnvValue("NEXT_PUBLIC_AMAP_KEY") ?? "",
+    NEXT_PUBLIC_AMAP_SECURITY_JS_CODE:
+      process.env.NEXT_PUBLIC_AMAP_SECURITY_JS_CODE ??
+      readRootEnvValue("NEXT_PUBLIC_AMAP_SECURITY_JS_CODE") ??
+      "",
+  },
 };
 
 export default nextConfig;

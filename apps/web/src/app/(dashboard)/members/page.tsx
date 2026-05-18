@@ -63,6 +63,7 @@ export default function MembersPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [filtersExpanded, setFiltersExpanded] = useState(true);
+  const [prefillLoading, setPrefillLoading] = useState(false);
 
   useEffect(() => {
     const nextKeyword = searchParams.get('keyword') ?? '';
@@ -229,6 +230,22 @@ export default function MembersPage() {
     [gender, keyword, lifeStatus],
   );
 
+  const openEditModal = useCallback(
+    async (record: MemberListItem) => {
+      setPrefillLoading(true);
+      try {
+        const detail = await api.getMember(record.id);
+        setEditingMember(detail);
+        setModalOpen(true);
+      } catch (error) {
+        message.error(error instanceof ApiError ? error.message : '成员详情加载失败');
+      } finally {
+        setPrefillLoading(false);
+      }
+    },
+    [message],
+  );
+
   const actionColumn = useMemo(
     () => ({
       title: '操作',
@@ -245,10 +262,8 @@ export default function MembersPage() {
               <Button
                 size="small"
                 icon={<EditOutlined />}
-                onClick={() => {
-                  setEditingMember(record);
-                  setModalOpen(true);
-                }}
+                loading={prefillLoading}
+                onClick={() => void openEditModal(record)}
               >
                 编辑
               </Button>
@@ -264,7 +279,7 @@ export default function MembersPage() {
         </Space>
       ),
     }),
-    [deleteMutation],
+    [deleteMutation, openEditModal, prefillLoading],
   );
 
   const desktopColumns = [
@@ -565,10 +580,8 @@ export default function MembersPage() {
                           <Button
                             size="small"
                             icon={<EditOutlined />}
-                            onClick={() => {
-                              setEditingMember(record);
-                              setModalOpen(true);
-                            }}
+                            loading={prefillLoading}
+                            onClick={() => void openEditModal(record)}
                           >
                             编辑
                           </Button>
@@ -607,7 +620,7 @@ export default function MembersPage() {
                 : '提交新建成员'
           }
           initialValue={editingMember}
-          loading={saveMutation.isPending}
+          loading={saveMutation.isPending || prefillLoading}
           onCancel={() => {
             setModalOpen(false);
             setEditingMember(undefined);

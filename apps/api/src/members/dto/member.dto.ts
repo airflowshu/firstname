@@ -15,8 +15,11 @@ import {
   IsIn,
   IsInt,
   IsOptional,
+  IsNumber,
   IsString,
+  Max,
   MaxLength,
+  Min as MinNumber,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -73,15 +76,49 @@ export class CreateMemberDto {
 
   @IsOptional()
   @IsDateString()
-  birthDate?: string;
+  birthDate?: string | null;
 
   @IsOptional()
   @IsDateString()
-  deathDate?: string;
+  deathDate?: string | null;
 
   @IsOptional()
   @IsEnum(LifeStatus)
   lifeStatus?: LifeStatus;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @MinNumber(-90)
+  @Max(90)
+  cemeteryLatitude?: number | null;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @MinNumber(-180)
+  @Max(180)
+  cemeteryLongitude?: number | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  cemeteryName?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  cemeteryAddress?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  cemeteryPoiId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  cemeteryRemark?: string | null;
 
   @IsOptional()
   @IsString()

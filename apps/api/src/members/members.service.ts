@@ -1826,20 +1826,27 @@ export class MembersService {
       father,
       mother,
     });
+    const normalizedDto = this.normalizeMemberLifecycleState(dto);
 
     const created = await this.prisma.member.create({
       data: {
-        name: dto.name,
-        gender: dto.gender,
-        birthDate: dto.birthDate ? new Date(dto.birthDate) : undefined,
-        deathDate: dto.deathDate ? new Date(dto.deathDate) : undefined,
-        lifeStatus: dto.lifeStatus ?? LifeStatus.ALIVE,
-        generationName: dto.generationName,
-        birthOrder: dto.birthOrder,
-        nativePlace: dto.nativePlace,
-        fatherId: dto.fatherId,
-        motherId: dto.motherId,
-        notes: dto.notes,
+        name: normalizedDto.name,
+        gender: normalizedDto.gender,
+        birthDate: normalizedDto.birthDate ? new Date(normalizedDto.birthDate) : null,
+        deathDate: normalizedDto.deathDate ? new Date(normalizedDto.deathDate) : null,
+        lifeStatus: normalizedDto.lifeStatus ?? LifeStatus.ALIVE,
+        cemeteryLatitude: normalizedDto.cemeteryLatitude ?? null,
+        cemeteryLongitude: normalizedDto.cemeteryLongitude ?? null,
+        cemeteryName: normalizedDto.cemeteryName ?? null,
+        cemeteryAddress: normalizedDto.cemeteryAddress ?? null,
+        cemeteryPoiId: normalizedDto.cemeteryPoiId ?? null,
+        cemeteryRemark: normalizedDto.cemeteryRemark ?? null,
+        generationName: normalizedDto.generationName ?? null,
+        birthOrder: normalizedDto.birthOrder ?? null,
+        nativePlace: normalizedDto.nativePlace ?? null,
+        fatherId: normalizedDto.fatherId ?? null,
+        motherId: normalizedDto.motherId ?? null,
+        notes: normalizedDto.notes ?? null,
       },
     });
 
@@ -1937,6 +1944,12 @@ export class MembersService {
             birthDate: existingChild.birthDate,
             deathDate: existingChild.deathDate,
             lifeStatus: existingChild.lifeStatus,
+            cemeteryLatitude: existingChild.cemeteryLatitude,
+            cemeteryLongitude: existingChild.cemeteryLongitude,
+            cemeteryName: existingChild.cemeteryName,
+            cemeteryAddress: existingChild.cemeteryAddress,
+            cemeteryPoiId: existingChild.cemeteryPoiId,
+            cemeteryRemark: existingChild.cemeteryRemark,
             fatherId: nextFatherId,
             motherId: nextMotherId,
           },
@@ -1987,6 +2000,12 @@ export class MembersService {
           birthDate: anchorMember.birthDate,
           deathDate: anchorMember.deathDate,
           lifeStatus: anchorMember.lifeStatus,
+          cemeteryLatitude: anchorMember.cemeteryLatitude,
+          cemeteryLongitude: anchorMember.cemeteryLongitude,
+          cemeteryName: anchorMember.cemeteryName,
+          cemeteryAddress: anchorMember.cemeteryAddress,
+          cemeteryPoiId: anchorMember.cemeteryPoiId,
+          cemeteryRemark: anchorMember.cemeteryRemark,
           fatherId: nextFatherId,
           motherId: nextMotherId,
         },
@@ -2096,27 +2115,34 @@ export class MembersService {
       father,
       mother,
     });
+    const normalizedPreparedMemberData = this.normalizeMemberLifecycleState(preparedMemberData);
 
     const familyId = this.currentFamilyId();
     const createdRelative = await this.prisma.$transaction(async (tx) => {
       const created = await tx.member.create({
         data: {
           familyId,
-          name: preparedMemberData.name,
-          gender: preparedMemberData.gender,
-          birthDate: preparedMemberData.birthDate
-            ? new Date(preparedMemberData.birthDate)
-            : undefined,
-          deathDate: preparedMemberData.deathDate
-            ? new Date(preparedMemberData.deathDate)
-            : undefined,
-          lifeStatus: preparedMemberData.lifeStatus ?? LifeStatus.ALIVE,
-          generationName: preparedMemberData.generationName,
-          birthOrder: preparedMemberData.birthOrder,
-          nativePlace: preparedMemberData.nativePlace,
-          fatherId: preparedMemberData.fatherId,
-          motherId: preparedMemberData.motherId,
-          notes: preparedMemberData.notes,
+          name: normalizedPreparedMemberData.name,
+          gender: normalizedPreparedMemberData.gender,
+          birthDate: normalizedPreparedMemberData.birthDate
+            ? new Date(normalizedPreparedMemberData.birthDate)
+            : null,
+          deathDate: normalizedPreparedMemberData.deathDate
+            ? new Date(normalizedPreparedMemberData.deathDate)
+            : null,
+          lifeStatus: normalizedPreparedMemberData.lifeStatus ?? LifeStatus.ALIVE,
+          cemeteryLatitude: normalizedPreparedMemberData.cemeteryLatitude ?? null,
+          cemeteryLongitude: normalizedPreparedMemberData.cemeteryLongitude ?? null,
+          cemeteryName: normalizedPreparedMemberData.cemeteryName ?? null,
+          cemeteryAddress: normalizedPreparedMemberData.cemeteryAddress ?? null,
+          cemeteryPoiId: normalizedPreparedMemberData.cemeteryPoiId ?? null,
+          cemeteryRemark: normalizedPreparedMemberData.cemeteryRemark ?? null,
+          generationName: normalizedPreparedMemberData.generationName ?? null,
+          birthOrder: normalizedPreparedMemberData.birthOrder ?? null,
+          nativePlace: normalizedPreparedMemberData.nativePlace ?? null,
+          fatherId: normalizedPreparedMemberData.fatherId ?? null,
+          motherId: normalizedPreparedMemberData.motherId ?? null,
+          notes: normalizedPreparedMemberData.notes ?? null,
         },
       });
 
@@ -2201,42 +2227,100 @@ export class MembersService {
 
     const nextFatherId = dto.fatherId ?? existingMember.fatherId ?? undefined;
     const nextMotherId = dto.motherId ?? existingMember.motherId ?? undefined;
+    const nextMemberState = {
+      name: dto.name ?? existingMember.name,
+      gender: dto.gender ?? existingMember.gender,
+      fatherId: nextFatherId,
+      motherId: nextMotherId,
+      birthDate:
+        dto.birthDate !== undefined
+          ? dto.birthDate
+          : existingMember.birthDate?.toISOString().slice(0, 10),
+      deathDate:
+        dto.deathDate !== undefined
+          ? dto.deathDate
+          : existingMember.deathDate?.toISOString().slice(0, 10),
+      lifeStatus: dto.lifeStatus ?? existingMember.lifeStatus,
+      cemeteryLatitude:
+        dto.cemeteryLatitude !== undefined
+          ? dto.cemeteryLatitude
+          : existingMember.cemeteryLatitude,
+      cemeteryLongitude:
+        dto.cemeteryLongitude !== undefined
+          ? dto.cemeteryLongitude
+          : existingMember.cemeteryLongitude,
+      cemeteryName:
+        dto.cemeteryName !== undefined ? dto.cemeteryName : existingMember.cemeteryName,
+      cemeteryAddress:
+        dto.cemeteryAddress !== undefined ? dto.cemeteryAddress : existingMember.cemeteryAddress,
+      cemeteryPoiId:
+        dto.cemeteryPoiId !== undefined ? dto.cemeteryPoiId : existingMember.cemeteryPoiId,
+      cemeteryRemark:
+        dto.cemeteryRemark !== undefined ? dto.cemeteryRemark : existingMember.cemeteryRemark,
+      generationName: dto.generationName ?? existingMember.generationName ?? undefined,
+      birthOrder: dto.birthOrder ?? existingMember.birthOrder ?? undefined,
+      nativePlace: dto.nativePlace ?? existingMember.nativePlace ?? undefined,
+      notes: dto.notes ?? existingMember.notes ?? undefined,
+    };
     const { father, mother } = await this.ensureParentReferences(nextFatherId, nextMotherId, id);
-    await this.validateMemberConsistency(
-      {
-        name: dto.name ?? existingMember.name,
-        gender: dto.gender ?? existingMember.gender,
-        fatherId: nextFatherId,
-        motherId: nextMotherId,
-        birthDate:
-          dto.birthDate !== undefined
-            ? dto.birthDate
-            : existingMember.birthDate?.toISOString().slice(0, 10),
-        deathDate:
-          dto.deathDate !== undefined
-            ? dto.deathDate
-            : existingMember.deathDate?.toISOString().slice(0, 10),
-        lifeStatus: dto.lifeStatus ?? existingMember.lifeStatus,
-        generationName: dto.generationName ?? existingMember.generationName ?? undefined,
-        birthOrder: dto.birthOrder ?? existingMember.birthOrder ?? undefined,
-        nativePlace: dto.nativePlace ?? existingMember.nativePlace ?? undefined,
-        notes: dto.notes ?? existingMember.notes ?? undefined,
-      },
-      {
-        currentId: id,
-        father,
-        mother,
-      },
-    );
+    await this.validateMemberConsistency(nextMemberState, {
+      currentId: id,
+      father,
+      mother,
+    });
 
     const updated = await this.prisma.member.update({
       where: { id },
       data: {
         name: dto.name,
         gender: dto.gender,
-        birthDate: dto.birthDate ? new Date(dto.birthDate) : undefined,
-        deathDate: dto.deathDate ? new Date(dto.deathDate) : undefined,
+        birthDate:
+          dto.birthDate !== undefined ? (dto.birthDate ? new Date(dto.birthDate) : null) : undefined,
+        deathDate:
+          dto.lifeStatus && dto.lifeStatus !== LifeStatus.DECEASED
+            ? null
+            : dto.deathDate !== undefined
+              ? dto.deathDate
+                ? new Date(dto.deathDate)
+                : null
+              : undefined,
         lifeStatus: dto.lifeStatus,
+        cemeteryLatitude:
+          dto.lifeStatus && dto.lifeStatus !== LifeStatus.DECEASED
+            ? null
+            : dto.cemeteryLatitude !== undefined
+              ? dto.cemeteryLatitude
+              : undefined,
+        cemeteryLongitude:
+          dto.lifeStatus && dto.lifeStatus !== LifeStatus.DECEASED
+            ? null
+            : dto.cemeteryLongitude !== undefined
+              ? dto.cemeteryLongitude
+              : undefined,
+        cemeteryName:
+          dto.lifeStatus && dto.lifeStatus !== LifeStatus.DECEASED
+            ? null
+            : dto.cemeteryName !== undefined
+              ? dto.cemeteryName
+              : undefined,
+        cemeteryAddress:
+          dto.lifeStatus && dto.lifeStatus !== LifeStatus.DECEASED
+            ? null
+            : dto.cemeteryAddress !== undefined
+              ? dto.cemeteryAddress
+              : undefined,
+        cemeteryPoiId:
+          dto.lifeStatus && dto.lifeStatus !== LifeStatus.DECEASED
+            ? null
+            : dto.cemeteryPoiId !== undefined
+              ? dto.cemeteryPoiId
+              : undefined,
+        cemeteryRemark:
+          dto.lifeStatus && dto.lifeStatus !== LifeStatus.DECEASED
+            ? null
+            : dto.cemeteryRemark !== undefined
+              ? dto.cemeteryRemark
+              : undefined,
         generationName: dto.generationName,
         birthOrder: dto.birthOrder,
         nativePlace: dto.nativePlace,
@@ -2274,38 +2358,56 @@ export class MembersService {
 
     const nextFatherId = patch.fatherId ?? existingMember.fatherId ?? undefined;
     const nextMotherId = patch.motherId ?? existingMember.motherId ?? undefined;
+    const nextMemberState = {
+      name: patch.name ?? existingMember.name,
+      gender: patch.gender ?? existingMember.gender,
+      fatherId: nextFatherId,
+      motherId: nextMotherId,
+      birthDate:
+        patch.birthDate !== undefined
+          ? patch.birthDate
+          : existingMember.birthDate?.toISOString().slice(0, 10),
+      deathDate:
+        patch.deathDate !== undefined
+          ? patch.deathDate
+          : existingMember.deathDate?.toISOString().slice(0, 10),
+      lifeStatus: patch.lifeStatus ?? existingMember.lifeStatus,
+      cemeteryLatitude:
+        patch.cemeteryLatitude !== undefined
+          ? patch.cemeteryLatitude
+          : existingMember.cemeteryLatitude,
+      cemeteryLongitude:
+        patch.cemeteryLongitude !== undefined
+          ? patch.cemeteryLongitude
+          : existingMember.cemeteryLongitude,
+      cemeteryName:
+        patch.cemeteryName !== undefined ? patch.cemeteryName : existingMember.cemeteryName,
+      cemeteryAddress:
+        patch.cemeteryAddress !== undefined
+          ? patch.cemeteryAddress
+          : existingMember.cemeteryAddress,
+      cemeteryPoiId:
+        patch.cemeteryPoiId !== undefined ? patch.cemeteryPoiId : existingMember.cemeteryPoiId,
+      cemeteryRemark:
+        patch.cemeteryRemark !== undefined
+          ? patch.cemeteryRemark
+          : existingMember.cemeteryRemark,
+      generationName: patch.generationName ?? existingMember.generationName ?? undefined,
+      birthOrder: patch.birthOrder ?? existingMember.birthOrder ?? undefined,
+      nativePlace: patch.nativePlace ?? existingMember.nativePlace ?? undefined,
+      notes: patch.notes ?? existingMember.notes ?? undefined,
+    };
     const { father, mother } = await this.ensureParentReferences(
       nextFatherId,
       nextMotherId,
       memberId,
     );
 
-    await this.validateMemberConsistency(
-      {
-        name: patch.name ?? existingMember.name,
-        gender: patch.gender ?? existingMember.gender,
-        fatherId: nextFatherId,
-        motherId: nextMotherId,
-        birthDate:
-          patch.birthDate !== undefined
-            ? patch.birthDate
-            : existingMember.birthDate?.toISOString().slice(0, 10),
-        deathDate:
-          patch.deathDate !== undefined
-            ? patch.deathDate
-            : existingMember.deathDate?.toISOString().slice(0, 10),
-        lifeStatus: patch.lifeStatus ?? existingMember.lifeStatus,
-        generationName: patch.generationName ?? existingMember.generationName ?? undefined,
-        birthOrder: patch.birthOrder ?? existingMember.birthOrder ?? undefined,
-        nativePlace: patch.nativePlace ?? existingMember.nativePlace ?? undefined,
-        notes: patch.notes ?? existingMember.notes ?? undefined,
-      },
-      {
-        currentId: memberId,
-        father,
-        mother,
-      },
-    );
+    await this.validateMemberConsistency(nextMemberState, {
+      currentId: memberId,
+      father,
+      mother,
+    });
   }
 
   async remove(id: string, operatorId: string) {
@@ -3280,6 +3382,12 @@ export class MembersService {
       birthDate?: string | Date | null;
       deathDate?: string | Date | null;
       lifeStatus?: LifeStatus;
+      cemeteryLatitude?: number | null;
+      cemeteryLongitude?: number | null;
+      cemeteryName?: string | null;
+      cemeteryAddress?: string | null;
+      cemeteryPoiId?: string | null;
+      cemeteryRemark?: string | null;
     },
     options: {
       currentId?: string;
@@ -3290,9 +3398,27 @@ export class MembersService {
     const errors: string[] = [];
     const birthDate = this.parseDateInput(dto.birthDate);
     const deathDate = this.parseDateInput(dto.deathDate);
+    const hasCemeteryData =
+      (dto.cemeteryLatitude !== null && dto.cemeteryLatitude !== undefined) ||
+      (dto.cemeteryLongitude !== null && dto.cemeteryLongitude !== undefined) ||
+      this.hasTextValue(dto.cemeteryName) ||
+      this.hasTextValue(dto.cemeteryAddress) ||
+      this.hasTextValue(dto.cemeteryPoiId) ||
+      this.hasTextValue(dto.cemeteryRemark);
 
     if (dto.lifeStatus !== LifeStatus.DECEASED && deathDate) {
       errors.push('只有生命状态为“已故”时才能填写去世日期。');
+    }
+
+    if (dto.lifeStatus !== LifeStatus.DECEASED && hasCemeteryData) {
+      errors.push('只有生命状态为“已故”时才能维护墓地位置标记。');
+    }
+
+    if (
+      (dto.cemeteryLatitude !== null && dto.cemeteryLatitude !== undefined) !==
+      (dto.cemeteryLongitude !== null && dto.cemeteryLongitude !== undefined)
+    ) {
+      errors.push('墓地位置标记需要同时填写经纬度坐标。');
     }
 
     if (birthDate && deathDate && birthDate.getTime() > deathDate.getTime()) {
@@ -3351,6 +3477,38 @@ export class MembersService {
 
     const parsed = new Date(value);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private normalizeMemberLifecycleState<
+    T extends {
+      lifeStatus?: LifeStatus;
+      deathDate?: string | Date | null;
+      cemeteryLatitude?: number | null;
+      cemeteryLongitude?: number | null;
+      cemeteryName?: string | null;
+      cemeteryAddress?: string | null;
+      cemeteryPoiId?: string | null;
+      cemeteryRemark?: string | null;
+    },
+  >(dto: T): T {
+    if (dto.lifeStatus !== LifeStatus.DECEASED) {
+      return {
+        ...dto,
+        deathDate: null,
+        cemeteryLatitude: null,
+        cemeteryLongitude: null,
+        cemeteryName: null,
+        cemeteryAddress: null,
+        cemeteryPoiId: null,
+        cemeteryRemark: null,
+      };
+    }
+
+    return dto;
+  }
+
+  private hasTextValue(value?: string | null) {
+    return typeof value === 'string' && value.trim().length > 0;
   }
 
   private normalizeCellValue(value: unknown) {

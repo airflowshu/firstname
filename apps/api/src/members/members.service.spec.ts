@@ -61,6 +61,39 @@ describe('MembersService', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
+  it('should reject cemetery marker when life status is not deceased', async () => {
+    prisma.member.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.create(
+        {
+          name: '测试成员',
+          gender: Gender.MALE,
+          lifeStatus: LifeStatus.ALIVE,
+          cemeteryLatitude: 31.2304,
+          cemeteryLongitude: 121.4737,
+        },
+        'operator-id',
+      ),
+    ).rejects.toThrow('只有生命状态为“已故”时才能维护墓地位置标记');
+  });
+
+  it('should reject cemetery marker when only one coordinate is provided', async () => {
+    prisma.member.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.create(
+        {
+          name: '测试成员',
+          gender: Gender.MALE,
+          lifeStatus: LifeStatus.DECEASED,
+          cemeteryLatitude: 31.2304,
+        },
+        'operator-id',
+      ),
+    ).rejects.toThrow('墓地位置标记需要同时填写经纬度坐标');
+  });
+
   it('should reject selecting a female member as father', async () => {
     prisma.member.findFirst
       .mockResolvedValueOnce({
@@ -273,6 +306,69 @@ describe('MembersService', () => {
         fatherId: 'anchor-member',
         motherId: undefined,
       },
+    });
+  });
+
+  it('should clear death date and cemetery fields when member is switched to alive', async () => {
+    prisma.member.findUnique.mockResolvedValue({
+      id: 'member-id',
+      name: '已故成员',
+      gender: Gender.MALE,
+      birthDate: new Date('1950-01-01'),
+      deathDate: new Date('2020-01-01'),
+      lifeStatus: LifeStatus.DECEASED,
+      cemeteryLatitude: 31.2304,
+      cemeteryLongitude: 121.4737,
+      cemeteryName: '福寿园',
+      cemeteryAddress: '上海市某墓园',
+      cemeteryPoiId: 'poi-1',
+      cemeteryRemark: '一区三排',
+      generationName: null,
+      birthOrder: null,
+      nativePlace: null,
+      fatherId: null,
+      motherId: null,
+      notes: null,
+      photoPath: null,
+      familyId: 'family-id',
+      isDeleted: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    prisma.member.update.mockResolvedValue({});
+    const getByIdSpy = jest.spyOn(service, 'getById').mockResolvedValue({ id: 'member-id' } as never);
+
+    try {
+      await service.update(
+        'member-id',
+        {
+          lifeStatus: LifeStatus.ALIVE,
+          deathDate: null,
+          cemeteryLatitude: null,
+          cemeteryLongitude: null,
+          cemeteryName: null,
+          cemeteryAddress: null,
+          cemeteryPoiId: null,
+          cemeteryRemark: null,
+        },
+        'operator-id',
+      );
+    } finally {
+      getByIdSpy.mockRestore();
+    }
+
+    expect(prisma.member.update).toHaveBeenCalledWith({
+      where: { id: 'member-id' },
+      data: expect.objectContaining({
+        lifeStatus: LifeStatus.ALIVE,
+        deathDate: null,
+        cemeteryLatitude: null,
+        cemeteryLongitude: null,
+        cemeteryName: null,
+        cemeteryAddress: null,
+        cemeteryPoiId: null,
+        cemeteryRemark: null,
+      }),
     });
   });
 });

@@ -256,6 +256,76 @@ a {
   overflow-x: hidden;
 }
 
+.cemetery-map-canvas,
+.cemetery-map-preview-canvas {
+  width: 100%;
+  min-height: 240px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(234, 216, 189, 0.92);
+  background:
+    linear-gradient(180deg, rgba(255, 251, 245, 0.94), rgba(246, 236, 218, 0.88)),
+    var(--surface);
+}
+
+.cemetery-map-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cemetery-picker-status {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(234, 216, 189, 0.92);
+  background:
+    linear-gradient(180deg, rgba(255, 251, 245, 0.96), rgba(246, 236, 218, 0.86)),
+    var(--surface);
+}
+
+.cemetery-picker-status-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cemetery-search-item {
+  cursor: default;
+}
+
+.cemetery-search-item-active {
+  background: rgba(236, 247, 255, 0.82);
+}
+
+.cemetery-search-item-active .ant-list-item-meta-title {
+  color: #0958d9;
+}
+
+.cemetery-search-list {
+  margin-top: 10px;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.cemetery-preview-card {
+  height: fit-content;
+}
+
+.member-overview-base-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.95fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.member-overview-base-descriptions {
+  min-width: 0;
+}
+
 .page-center {
   min-height: 60vh;
   display: flex;
@@ -2783,5 +2853,20 @@ a {
 
   .invite-card {
     margin: auto 0;
+  }
+
+  .cemetery-map-canvas,
+  .cemetery-map-preview-canvas {
+    min-height: 220px;
+  }
+
+  .cemetery-map-meta-grid,
+  .cemetery-picker-status,
+  .member-overview-base-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cemetery-picker-status {
+    flex-direction: column;
   }
 }

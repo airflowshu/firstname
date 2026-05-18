@@ -19,6 +19,7 @@ import { api, ApiError } from '@/lib/api';
 import type { DuplicateMemberCheckResult, LifeStatus } from '@/lib/types';
 import type { MemberListItem, MemberOption } from '@/lib/types';
 import { formatDate } from '@/lib/format';
+import { CemeteryMapPicker } from './cemetery-map-picker';
 import { RemoteMemberSelect } from './remote-member-select';
 
 const { Text } = Typography;
@@ -69,6 +70,12 @@ export function MemberFormModal({
   const watchedMotherId = Form.useWatch('motherId', form) as string | undefined;
   const watchedGenerationName = Form.useWatch('generationName', form) as string | undefined;
   const watchedNativePlace = Form.useWatch('nativePlace', form) as string | undefined;
+  const watchedCemeteryLatitude = Form.useWatch('cemeteryLatitude', form) as number | undefined | null;
+  const watchedCemeteryLongitude = Form.useWatch('cemeteryLongitude', form) as number | undefined | null;
+  const watchedCemeteryName = Form.useWatch('cemeteryName', form) as string | undefined | null;
+  const watchedCemeteryAddress = Form.useWatch('cemeteryAddress', form) as string | undefined | null;
+  const watchedCemeteryPoiId = Form.useWatch('cemeteryPoiId', form) as string | undefined | null;
+  const watchedCemeteryRemark = Form.useWatch('cemeteryRemark', form) as string | undefined | null;
   const [duplicateResult, setDuplicateResult] = useState<DuplicateMemberCheckResult | null>(null);
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
   const [nameMatchOptions, setNameMatchOptions] = useState<MemberOption[]>([]);
@@ -85,19 +92,31 @@ export function MemberFormModal({
       ...initialValue,
       birthDate: initialValue?.birthDate ? dayjs(initialValue.birthDate) : undefined,
       deathDate: initialValue?.deathDate ? dayjs(initialValue.deathDate) : undefined,
+      cemeteryLatitude: initialValue?.cemeteryLatitude ?? null,
+      cemeteryLongitude: initialValue?.cemeteryLongitude ?? null,
+      cemeteryName: initialValue?.cemeteryName ?? null,
+      cemeteryAddress: initialValue?.cemeteryAddress ?? null,
+      cemeteryPoiId: initialValue?.cemeteryPoiId ?? null,
+      cemeteryRemark: initialValue?.cemeteryRemark ?? null,
     });
     setSelectedExistingMember(null);
     setNameMatchOptions([]);
   }, [form, initialValue, open]);
 
   useEffect(() => {
-    if (!open || lifeStatus === 'DECEASED') {
+    if (!open || lifeStatus === undefined || lifeStatus === 'DECEASED') {
       return;
     }
 
-    if (form.getFieldValue('deathDate')) {
-      form.setFieldValue('deathDate', undefined);
-    }
+    form.setFieldsValue({
+      deathDate: undefined,
+      cemeteryLatitude: null,
+      cemeteryLongitude: null,
+      cemeteryName: null,
+      cemeteryAddress: null,
+      cemeteryPoiId: null,
+      cemeteryRemark: null,
+    });
   }, [form, lifeStatus, open]);
 
   useEffect(() => {
@@ -248,6 +267,12 @@ export function MemberFormModal({
       birthDate: undefined,
       deathDate: undefined,
       lifeStatus: initialValue?.lifeStatus ?? 'ALIVE',
+      cemeteryLatitude: null,
+      cemeteryLongitude: null,
+      cemeteryName: null,
+      cemeteryAddress: null,
+      cemeteryPoiId: null,
+      cemeteryRemark: null,
       generationName: undefined,
       birthOrder: undefined,
       nativePlace: undefined,
@@ -315,7 +340,21 @@ export function MemberFormModal({
             ...values,
             existingMemberId: existingMemberNameMatch?.enabled ? selectedExistingMember?.id : undefined,
             birthDate: values.birthDate ? values.birthDate.format('YYYY-MM-DD') : undefined,
-            deathDate: values.deathDate ? values.deathDate.format('YYYY-MM-DD') : undefined,
+            deathDate:
+              values.lifeStatus === 'DECEASED'
+                ? values.deathDate
+                  ? values.deathDate.format('YYYY-MM-DD')
+                  : null
+                : null,
+            cemeteryLatitude: values.lifeStatus === 'DECEASED' ? (values.cemeteryLatitude ?? null) : null,
+            cemeteryLongitude:
+              values.lifeStatus === 'DECEASED' ? (values.cemeteryLongitude ?? null) : null,
+            cemeteryName: values.lifeStatus === 'DECEASED' ? values.cemeteryName?.trim() || null : null,
+            cemeteryAddress:
+              values.lifeStatus === 'DECEASED' ? values.cemeteryAddress?.trim() || null : null,
+            cemeteryPoiId: values.lifeStatus === 'DECEASED' ? values.cemeteryPoiId?.trim() || null : null,
+            cemeteryRemark:
+              values.lifeStatus === 'DECEASED' ? values.cemeteryRemark?.trim() || null : null,
           });
         }}
       >
@@ -537,6 +576,40 @@ export function MemberFormModal({
             </Form.Item>
           )}
         </div>
+        {lifeStatus === 'DECEASED' ? (
+          <Form.Item label="墓地位置标记" style={{ marginTop: 8 }}>
+            <CemeteryMapPicker
+              value={{
+                cemeteryLatitude: watchedCemeteryLatitude,
+                cemeteryLongitude: watchedCemeteryLongitude,
+                cemeteryName: watchedCemeteryName,
+                cemeteryAddress: watchedCemeteryAddress,
+                cemeteryPoiId: watchedCemeteryPoiId,
+                cemeteryRemark: watchedCemeteryRemark,
+              }}
+              disabled={Boolean(selectedExistingMember)}
+              onChange={(nextValue) => form.setFieldsValue(nextValue)}
+            />
+          </Form.Item>
+        ) : null}
+        <Form.Item name="cemeteryLatitude" hidden>
+          <InputNumber />
+        </Form.Item>
+        <Form.Item name="cemeteryLongitude" hidden>
+          <InputNumber />
+        </Form.Item>
+        <Form.Item name="cemeteryName" hidden>
+          <Input />
+        </Form.Item>
+        <Form.Item name="cemeteryAddress" hidden>
+          <Input />
+        </Form.Item>
+        <Form.Item name="cemeteryPoiId" hidden>
+          <Input />
+        </Form.Item>
+        <Form.Item name="cemeteryRemark" hidden>
+          <Input />
+        </Form.Item>
         <Form.Item name="notes" label="备注">
           <Input.TextArea
             disabled={Boolean(selectedExistingMember)}

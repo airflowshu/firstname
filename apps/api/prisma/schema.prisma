@@ -182,6 +182,12 @@ model Member {
   birthDate          DateTime?
   deathDate          DateTime?
   lifeStatus         LifeStatus          @default(ALIVE)
+  cemeteryLatitude   Float?
+  cemeteryLongitude  Float?
+  cemeteryName       String?
+  cemeteryAddress    String?
+  cemeteryPoiId      String?
+  cemeteryRemark     String?
   photoPath          String?
   generationName     String?
   birthOrder         Int?

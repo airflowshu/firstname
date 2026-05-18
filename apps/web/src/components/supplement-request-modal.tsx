@@ -4,6 +4,7 @@ import dayjs from 'dayjs';
 import { Alert, DatePicker, Form, Input, InputNumber, Modal, Select } from 'antd';
 import { useEffect } from 'react';
 import type { MemberDetail } from '@/lib/types';
+import { CemeteryMapPicker } from './cemetery-map-picker';
 
 type SupplementRequestFormValues = {
   name?: string;
@@ -11,6 +12,12 @@ type SupplementRequestFormValues = {
   birthDate?: dayjs.Dayjs;
   deathDate?: dayjs.Dayjs;
   lifeStatus?: MemberDetail['lifeStatus'];
+  cemeteryLatitude?: number | null;
+  cemeteryLongitude?: number | null;
+  cemeteryName?: string | null;
+  cemeteryAddress?: string | null;
+  cemeteryPoiId?: string | null;
+  cemeteryRemark?: string | null;
   generationName?: string;
   birthOrder?: number;
   nativePlace?: string;
@@ -36,6 +43,12 @@ export function SupplementRequestModal({
 }) {
   const [form] = Form.useForm<SupplementRequestFormValues>();
   const lifeStatus = Form.useWatch('lifeStatus', form);
+  const cemeteryLatitude = Form.useWatch('cemeteryLatitude', form);
+  const cemeteryLongitude = Form.useWatch('cemeteryLongitude', form);
+  const cemeteryName = Form.useWatch('cemeteryName', form);
+  const cemeteryAddress = Form.useWatch('cemeteryAddress', form);
+  const cemeteryPoiId = Form.useWatch('cemeteryPoiId', form);
+  const cemeteryRemark = Form.useWatch('cemeteryRemark', form);
 
   useEffect(() => {
     if (!open || !member) {
@@ -49,6 +62,12 @@ export function SupplementRequestModal({
       birthDate: member.birthDate ? dayjs(member.birthDate) : undefined,
       deathDate: member.deathDate ? dayjs(member.deathDate) : undefined,
       lifeStatus: member.lifeStatus,
+      cemeteryLatitude: member.cemeteryLatitude ?? null,
+      cemeteryLongitude: member.cemeteryLongitude ?? null,
+      cemeteryName: member.cemeteryName ?? null,
+      cemeteryAddress: member.cemeteryAddress ?? null,
+      cemeteryPoiId: member.cemeteryPoiId ?? null,
+      cemeteryRemark: member.cemeteryRemark ?? null,
       generationName: member.generationName ?? undefined,
       birthOrder: member.birthOrder ?? undefined,
       nativePlace: member.nativePlace ?? undefined,
@@ -58,13 +77,19 @@ export function SupplementRequestModal({
   }, [form, member, open]);
 
   useEffect(() => {
-    if (!open || lifeStatus === 'DECEASED') {
+    if (!open || lifeStatus === undefined || lifeStatus === 'DECEASED') {
       return;
     }
 
-    if (form.getFieldValue('deathDate')) {
-      form.setFieldValue('deathDate', undefined);
-    }
+    form.setFieldsValue({
+      deathDate: undefined,
+      cemeteryLatitude: null,
+      cemeteryLongitude: null,
+      cemeteryName: null,
+      cemeteryAddress: null,
+      cemeteryPoiId: null,
+      cemeteryRemark: null,
+    });
   }, [form, lifeStatus, open]);
 
   return (
@@ -97,6 +122,11 @@ export function SupplementRequestModal({
               patch[key] = nextValue;
             }
           };
+          const setNullableIfChanged = (key: string, nextValue: unknown, currentValue: unknown) => {
+            if (JSON.stringify(nextValue ?? null) !== JSON.stringify(currentValue ?? null)) {
+              patch[key] = nextValue ?? null;
+            }
+          };
 
           setIfChanged('name', values.name?.trim(), member.name);
           setIfChanged('gender', values.gender, member.gender);
@@ -105,12 +135,42 @@ export function SupplementRequestModal({
             values.birthDate ? values.birthDate.format('YYYY-MM-DD') : undefined,
             member.birthDate ? dayjs(member.birthDate).format('YYYY-MM-DD') : undefined,
           );
-          setIfChanged(
+          setNullableIfChanged(
             'deathDate',
-            values.deathDate ? values.deathDate.format('YYYY-MM-DD') : undefined,
+            values.lifeStatus === 'DECEASED'
+              ? values.deathDate
+                ? values.deathDate.format('YYYY-MM-DD')
+                : null
+              : null,
             member.deathDate ? dayjs(member.deathDate).format('YYYY-MM-DD') : undefined,
           );
           setIfChanged('lifeStatus', values.lifeStatus, member.lifeStatus);
+          setNullableIfChanged('cemeteryLatitude', values.lifeStatus === 'DECEASED' ? values.cemeteryLatitude : null, member.cemeteryLatitude);
+          setNullableIfChanged(
+            'cemeteryLongitude',
+            values.lifeStatus === 'DECEASED' ? values.cemeteryLongitude : null,
+            member.cemeteryLongitude,
+          );
+          setNullableIfChanged(
+            'cemeteryName',
+            values.lifeStatus === 'DECEASED' ? values.cemeteryName?.trim() || null : null,
+            member.cemeteryName,
+          );
+          setNullableIfChanged(
+            'cemeteryAddress',
+            values.lifeStatus === 'DECEASED' ? values.cemeteryAddress?.trim() || null : null,
+            member.cemeteryAddress,
+          );
+          setNullableIfChanged(
+            'cemeteryPoiId',
+            values.lifeStatus === 'DECEASED' ? values.cemeteryPoiId?.trim() || null : null,
+            member.cemeteryPoiId,
+          );
+          setNullableIfChanged(
+            'cemeteryRemark',
+            values.lifeStatus === 'DECEASED' ? values.cemeteryRemark?.trim() || null : null,
+            member.cemeteryRemark,
+          );
           setIfChanged('generationName', values.generationName?.trim(), member.generationName ?? undefined);
           setIfChanged('birthOrder', values.birthOrder, member.birthOrder ?? undefined);
           setIfChanged('nativePlace', values.nativePlace?.trim(), member.nativePlace ?? undefined);
@@ -204,6 +264,39 @@ export function SupplementRequestModal({
             <Input placeholder="如：江苏徐州" />
           </Form.Item>
         </div>
+        {lifeStatus === 'DECEASED' ? (
+          <Form.Item label="墓地位置标记" style={{ marginTop: 8 }}>
+            <CemeteryMapPicker
+              value={{
+                cemeteryLatitude: cemeteryLatitude ?? null,
+                cemeteryLongitude: cemeteryLongitude ?? null,
+                cemeteryName: cemeteryName ?? null,
+                cemeteryAddress: cemeteryAddress ?? null,
+                cemeteryPoiId: cemeteryPoiId ?? null,
+                cemeteryRemark: cemeteryRemark ?? null,
+              }}
+              onChange={(nextValue) => form.setFieldsValue(nextValue)}
+            />
+          </Form.Item>
+        ) : null}
+        <Form.Item name="cemeteryLatitude" hidden>
+          <InputNumber />
+        </Form.Item>
+        <Form.Item name="cemeteryLongitude" hidden>
+          <InputNumber />
+        </Form.Item>
+        <Form.Item name="cemeteryName" hidden>
+          <Input />
+        </Form.Item>
+        <Form.Item name="cemeteryAddress" hidden>
+          <Input />
+        </Form.Item>
+        <Form.Item name="cemeteryPoiId" hidden>
+          <Input />
+        </Form.Item>
+        <Form.Item name="cemeteryRemark" hidden>
+          <Input />
+        </Form.Item>
         <Form.Item name="notes" label="备注">
           <Input.TextArea rows={4} placeholder="补充生平说明、家族备注等" />
         </Form.Item>

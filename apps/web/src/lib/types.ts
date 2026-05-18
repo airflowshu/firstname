@@ -37,6 +37,15 @@ export type MemberEventType =
   | 'STORY'
   | 'OTHER';
 
+export interface CemeteryLocationFields {
+  cemeteryLatitude: number | null;
+  cemeteryLongitude: number | null;
+  cemeteryName: string | null;
+  cemeteryAddress: string | null;
+  cemeteryPoiId: string | null;
+  cemeteryRemark: string | null;
+}
+
 export interface AuthUser {
   id: string;
   username: string;
@@ -206,6 +215,12 @@ export interface MemberListItem {
   birthDate: string | null;
   deathDate: string | null;
   lifeStatus: LifeStatus;
+  cemeteryLatitude: number | null;
+  cemeteryLongitude: number | null;
+  cemeteryName: string | null;
+  cemeteryAddress: string | null;
+  cemeteryPoiId: string | null;
+  cemeteryRemark: string | null;
   generationName: string | null;
   birthOrder: number | null;
   nativePlace: string | null;
