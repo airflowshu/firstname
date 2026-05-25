@@ -55,6 +55,7 @@ export function AssetBatchModal({
       confirmLoading={loading}
       okText={isTagsAction ? '批量追加' : '批量设置'}
       cancelText="取消"
+      forceRender
       destroyOnHidden
       width={640}
     >

@@ -1,0 +1,12 @@
+@media (prefers-reduced-motion: reduce) {
+  .login-card,
+  .login-hero,
+  .login-form-panel,
+  .login-hero-copy,
+  .login-feature-card,
+  .login-book,
+  .login-form-frame,
+  .login-stamp {
+    animation: none;
+  }
+}

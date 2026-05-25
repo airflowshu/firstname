@@ -300,6 +300,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           passwordForm.resetFields();
         }}
         onOk={() => passwordForm.submit()}
+        forceRender
         destroyOnHidden
       >
         <Form form={passwordForm} layout="vertical" onFinish={handleChangePassword}>

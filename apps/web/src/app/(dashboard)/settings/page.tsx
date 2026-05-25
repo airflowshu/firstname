@@ -20,7 +20,7 @@ import {
 } from 'antd';
 import { useEffect, useState } from 'react';
 import { AuthGuard } from '@/components/auth-guard';
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, type KinshipAliasPayload } from '@/lib/api';
 import type { AssetSourceRecord, AssetTagRecord, KinshipAlias } from '@/lib/types';
 
 const { Title, Text } = Typography;
@@ -53,7 +53,7 @@ export default function SettingsPage() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: async (payload: Record<string, unknown>) => {
+    mutationFn: async (payload: KinshipAliasPayload) => {
       if (editingAlias) {
         return api.updateKinshipAlias(editingAlias.id, payload);
       }
@@ -404,6 +404,7 @@ export default function SettingsPage() {
             setEditingAlias(undefined);
           }}
           onOk={() => form.submit()}
+          forceRender
           destroyOnHidden
         >
           <Form form={form} layout="vertical" onFinish={(values) => saveMutation.mutate(values)}>
@@ -452,6 +453,7 @@ export default function SettingsPage() {
             setEditingTag(undefined);
           }}
           onOk={() => tagForm.submit()}
+          forceRender
           destroyOnHidden
         >
           <Form
@@ -500,6 +502,7 @@ export default function SettingsPage() {
             setEditingSource(undefined);
           }}
           onOk={() => sourceForm.submit()}
+          forceRender
           destroyOnHidden
         >
           <Form

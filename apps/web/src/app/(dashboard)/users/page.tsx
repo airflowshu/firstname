@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { App, Button, Card, Form, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { AuthGuard } from '@/components/auth-guard';
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, type UserMutationPayload } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import type { UserRecord } from '@/lib/types';
 
@@ -28,7 +28,7 @@ export default function UsersPage() {
   );
 
   const saveMutation = useMutation({
-    mutationFn: async (payload: Record<string, unknown>) => {
+    mutationFn: async (payload: UserMutationPayload) => {
       if (editingUser) {
         return api.updateUser(editingUser.id, payload);
       }
@@ -173,6 +173,7 @@ export default function UsersPage() {
             setEditingUser(undefined);
           }}
           onOk={() => form.submit()}
+          forceRender
           destroyOnHidden
         >
           <Form form={form} layout="vertical" onFinish={(values) => saveMutation.mutate(values)}>

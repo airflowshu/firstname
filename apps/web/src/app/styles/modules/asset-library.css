@@ -1,0 +1,178 @@
+.asset-library-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.asset-library-tag-wall {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.asset-library-filter-tag {
+  cursor: pointer;
+  margin-inline-end: 0 !important;
+}
+
+.asset-library-card {
+  height: 100%;
+  border-radius: 18px !important;
+  overflow: hidden;
+  border: 1px solid var(--panel-border) !important;
+  background: var(--shell-card-bg) !important;
+}
+
+.asset-library-card-selected {
+  border-color: var(--brand-strong-border) !important;
+  box-shadow: 0 0 0 2px var(--brand-focus-ring);
+}
+
+.asset-library-card .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 320px;
+}
+
+.asset-library-cover {
+  height: 220px;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--brand-info-blend-start), var(--brand-info-blend-end));
+}
+
+.asset-library-cover .ant-image,
+.asset-library-cover .ant-image-img {
+  width: 100%;
+  height: 220px;
+}
+
+.asset-library-cover-doc {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 18px;
+  padding: 26px 28px;
+}
+
+.asset-library-cover-doc .ant-avatar {
+  flex: 0 0 auto;
+}
+
+.asset-library-doc-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.asset-library-doc-name {
+  display: -webkit-box;
+  color: var(--text-primary) !important;
+  line-height: 1.55;
+  word-break: break-word;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.asset-library-doc-size {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--neutral-overlay-soft);
+  color: var(--text-muted) !important;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.asset-library-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1 1 auto;
+}
+
+.asset-library-select {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.asset-library-title {
+  margin: 0 !important;
+  color: var(--text-primary) !important;
+  line-height: 1.4 !important;
+}
+
+.asset-library-subline {
+  display: block;
+  line-height: 1.55;
+}
+
+.asset-library-description {
+  margin: 0 !important;
+  color: var(--text-secondary) !important;
+  line-height: 1.7;
+}
+
+.asset-library-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  flex-wrap: wrap;
+}
+
+.asset-library-admin-actions {
+  margin-top: 4px;
+}
+
+.asset-library-pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.asset-library-pagination-actions {
+  justify-content: center;
+}
+
+.asset-library-compact .asset-library-card .ant-card-body {
+  min-height: 260px;
+  gap: 10px;
+}
+
+.asset-library-compact .asset-library-cover,
+.asset-library-compact .asset-library-cover .ant-image,
+.asset-library-compact .asset-library-cover .ant-image-img {
+  height: 180px;
+}
+
+.asset-library-compact .asset-library-cover-doc {
+  gap: 14px;
+  padding: 22px 24px;
+}
+
+.asset-library-compact .asset-library-doc-info {
+  gap: 10px;
+}
+
+.asset-library-compact .asset-library-cover-doc .ant-avatar {
+  width: 60px !important;
+  height: 60px !important;
+  min-width: 60px;
+  font-size: 26px !important;
+}
+
+.asset-library-compact .asset-library-description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}

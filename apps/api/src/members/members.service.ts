@@ -67,21 +67,77 @@ export class MembersService {
   ) {}
 
   async list(query: MemberQueryDto) {
+    const page = Number.isFinite(query.page) && query.page && query.page > 0 ? Math.floor(query.page) : 1;
+    const pageSize =
+      Number.isFinite(query.pageSize) && query.pageSize && query.pageSize > 0
+        ? Math.min(Math.floor(query.pageSize), 100)
+        : 10;
+    const normalizedKeyword = query.keyword?.trim();
+    const normalizedGenerationName = query.generationName?.trim();
+    const normalizedNativePlace = query.nativePlace?.trim();
+    const birthYearFrom = query.birthYearFrom ? Math.floor(query.birthYearFrom) : undefined;
+    const birthYearTo = query.birthYearTo ? Math.floor(query.birthYearTo) : undefined;
+
+    if (birthYearFrom && birthYearTo && birthYearFrom > birthYearTo) {
+      throw new BadRequestException('出生年份起始值不能大于结束值。');
+    }
+
+    const birthDate: Prisma.DateTimeNullableFilter | undefined =
+      birthYearFrom || birthYearTo
+        ? {
+            gte: birthYearFrom
+              ? new Date(Date.UTC(birthYearFrom, 0, 1, 0, 0, 0, 0))
+              : undefined,
+            lte: birthYearTo
+              ? new Date(Date.UTC(birthYearTo, 11, 31, 23, 59, 59, 999))
+              : undefined,
+          }
+        : undefined;
+    const orderDirection = query.sortOrder ?? 'asc';
+    const sortBy = query.sortBy;
+    const orderBy: Prisma.MemberOrderByWithRelationInput[] =
+      sortBy === 'name'
+        ? [{ name: orderDirection }, { createdAt: 'desc' }]
+        : sortBy === 'birthDate'
+          ? [{ birthDate: orderDirection }, { createdAt: 'desc' }]
+          : sortBy === 'generationName'
+            ? [{ generationName: orderDirection }, { birthOrder: 'asc' }, { createdAt: 'desc' }]
+            : sortBy === 'createdAt'
+              ? [{ createdAt: orderDirection }]
+              : sortBy === 'updatedAt'
+                ? [{ updatedAt: orderDirection }]
+                : [{ generationName: 'asc' }, { birthOrder: 'asc' }, { createdAt: 'desc' }];
     const where: Prisma.MemberWhereInput = {
       isDeleted: query.includeDeleted ? undefined : false,
       gender: query.gender,
       lifeStatus: query.lifeStatus,
-      OR: query.keyword
+      generationName: normalizedGenerationName
+        ? { contains: normalizedGenerationName, mode: 'insensitive' }
+        : undefined,
+      nativePlace: normalizedNativePlace
+        ? { contains: normalizedNativePlace, mode: 'insensitive' }
+        : undefined,
+      birthDate,
+      photoPath:
+        query.hasPhoto === undefined
+          ? undefined
+          : query.hasPhoto
+            ? { not: null }
+            : null,
+      assets:
+        query.hasAssets === undefined
+          ? undefined
+          : query.hasAssets
+            ? { some: { isDeleted: false } }
+            : { none: { isDeleted: false } },
+      OR: normalizedKeyword
         ? [
-            { name: { contains: query.keyword, mode: 'insensitive' } },
-            { generationName: { contains: query.keyword, mode: 'insensitive' } },
-            { nativePlace: { contains: query.keyword, mode: 'insensitive' } },
+            { name: { contains: normalizedKeyword, mode: 'insensitive' } },
+            { generationName: { contains: normalizedKeyword, mode: 'insensitive' } },
+            { nativePlace: { contains: normalizedKeyword, mode: 'insensitive' } },
           ]
         : undefined,
     };
-
-    const page = query.page ?? 1;
-    const pageSize = query.pageSize ?? 10;
 
     const [total, data] = await this.prisma.$transaction([
       this.prisma.member.count({ where }),
@@ -94,8 +150,17 @@ export class MembersService {
           mother: {
             select: { id: true, name: true },
           },
+          _count: {
+            select: {
+              assets: {
+                where: {
+                  isDeleted: false,
+                },
+              },
+            },
+          },
         },
-        orderBy: [{ generationName: 'asc' }, { birthOrder: 'asc' }, { createdAt: 'desc' }],
+        orderBy,
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
@@ -105,8 +170,9 @@ export class MembersService {
       total,
       page,
       pageSize,
-      data: data.map((member) => ({
+      data: data.map(({ _count, ...member }) => ({
         ...member,
+        assetCount: _count.assets,
         photoUrl: buildPhotoUrl(member.photoPath),
       })),
     };

@@ -95,6 +95,7 @@ export function MemberAssetModal({
       okText={isUpload ? '保存上传' : '保存资料信息'}
       cancelText="取消"
       okButtonProps={{ disabled: isUpload && fileList.length === 0 }}
+      forceRender
       destroyOnHidden
       width={720}
     >

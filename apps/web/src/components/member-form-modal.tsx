@@ -15,6 +15,7 @@ import {
   Typography,
 } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
+import type { MemberMutationPayload } from '@/lib/api';
 import { api, ApiError } from '@/lib/api';
 import type { DuplicateMemberCheckResult, LifeStatus } from '@/lib/types';
 import type { MemberListItem, MemberOption } from '@/lib/types';
@@ -59,7 +60,7 @@ export function MemberFormModal({
   existingMemberNameMatch?: ExistingMemberNameMatchConfig;
   loading?: boolean;
   onCancel: () => void;
-  onSubmit: (values: Record<string, unknown>) => Promise<void> | void;
+  onSubmit: (values: MemberMutationPayload) => Promise<void> | void;
 }) {
   const [form] = Form.useForm();
   const lifeStatus = Form.useWatch('lifeStatus', form) as LifeStatus | undefined;
@@ -329,6 +330,7 @@ export function MemberFormModal({
       onCancel={onCancel}
       onOk={() => form.submit()}
       confirmLoading={loading}
+      forceRender
       destroyOnHidden
       width={760}
     >
@@ -336,7 +338,7 @@ export function MemberFormModal({
         form={form}
         layout="vertical"
         onFinish={async (values) => {
-          await onSubmit({
+          const payload: MemberMutationPayload = {
             ...values,
             existingMemberId: existingMemberNameMatch?.enabled ? selectedExistingMember?.id : undefined,
             birthDate: values.birthDate ? values.birthDate.format('YYYY-MM-DD') : undefined,
@@ -355,7 +357,9 @@ export function MemberFormModal({
             cemeteryPoiId: values.lifeStatus === 'DECEASED' ? values.cemeteryPoiId?.trim() || null : null,
             cemeteryRemark:
               values.lifeStatus === 'DECEASED' ? values.cemeteryRemark?.trim() || null : null,
-          });
+          };
+
+          await onSubmit(payload);
         }}
       >
         {selectedExistingMember ? (

@@ -3,6 +3,7 @@
 import dayjs from 'dayjs';
 import { DatePicker, Form, Input, Modal, Select } from 'antd';
 import { useEffect } from 'react';
+import type { MarriageMutationPayload } from '@/lib/api';
 import type { MemberOption } from '@/lib/types';
 import { RemoteMemberSelect } from './remote-member-select';
 
@@ -23,11 +24,11 @@ export function MarriageFormModal({
   spouseName?: string;
   seedOptions?: MemberOption[];
   loading?: boolean;
-  initialValue?: Record<string, unknown>;
+  initialValue?: MarriageMutationPayload;
   canSelectSpouse?: boolean;
   disabledIds?: string[];
   onCancel: () => void;
-  onSubmit: (values: Record<string, unknown>) => Promise<void> | void;
+  onSubmit: (values: MarriageMutationPayload) => Promise<void> | void;
 }) {
   const [form] = Form.useForm();
   const marriageStatus = Form.useWatch('status', form) as string | undefined;
@@ -62,6 +63,7 @@ export function MarriageFormModal({
       onCancel={onCancel}
       onOk={() => form.submit()}
       confirmLoading={loading}
+      forceRender
       destroyOnHidden
     >
       <Form

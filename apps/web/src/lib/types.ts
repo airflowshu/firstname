@@ -229,6 +229,7 @@ export interface MemberListItem {
   notes: string | null;
   photoPath?: string | null;
   photoUrl?: string | null;
+  assetCount?: number;
   isDeleted: boolean;
   father?: {
     id: string;

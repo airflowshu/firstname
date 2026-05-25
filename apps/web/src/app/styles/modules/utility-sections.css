@@ -1,0 +1,65 @@
+.sticky-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(12px);
+}
+
+.sticky-toolbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--panel-border);
+  background: var(--shell-card-bg);
+  box-shadow: var(--panel-shadow-soft);
+}
+
+.sticky-toolbar-context {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sticky-toolbar-actions {
+  justify-content: flex-end;
+}
+
+.section-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.section-summary-card {
+  border-radius: 18px;
+  border: 1px dashed var(--border-subtle);
+  background: var(--surface-muted);
+}
+
+.stat-card {
+  border: 1px solid var(--panel-border) !important;
+  background: var(--shell-stat-card-bg) !important;
+  box-shadow: var(--panel-shadow-soft);
+}
+
+.stat-card .ant-card-body {
+  min-height: 112px;
+  display: flex;
+  align-items: center;
+}
+
+.stat-card .ant-statistic-title {
+  color: var(--text-muted) !important;
+}
+
+.stat-card .ant-statistic-content {
+  color: var(--text-primary) !important;
+}
+
+.stat-card .ant-statistic-content-prefix {
+  color: var(--brand-deep);
+}

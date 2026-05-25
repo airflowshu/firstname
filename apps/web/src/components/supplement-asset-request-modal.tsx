@@ -77,6 +77,7 @@ export function SupplementAssetRequestModal({
       cancelText="取消"
       confirmLoading={loading}
       okButtonProps={{ disabled: fileList.length === 0 }}
+      forceRender
       destroyOnHidden
       width={720}
     >

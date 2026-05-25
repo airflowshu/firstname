@@ -1,0 +1,147 @@
+@media (max-width: 960px) {
+  .app-header {
+    padding: 12px !important;
+    align-items: flex-start;
+  }
+
+  .header-main {
+    flex-basis: 100%;
+  }
+
+  .header-subtitle {
+    white-space: normal;
+  }
+
+  .header-user {
+    margin-left: auto;
+  }
+
+  .family-switcher {
+    flex: 1 1 220px;
+  }
+
+  .header-user-meta {
+    display: none;
+  }
+
+  .app-content {
+    padding: 14px;
+  }
+
+  .login-page {
+    height: auto;
+    min-height: 100svh;
+    overflow-y: auto;
+  }
+
+  .page-hero {
+    gap: 16px;
+  }
+
+  .page-hero-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .page-hero-actions > * {
+    flex: 1 1 auto;
+  }
+
+  .member-hero-loading {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .member-hero-loading-copy {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .member-overview-pills {
+    gap: 6px;
+  }
+
+  .member-detail-tabs .ant-tabs-nav-list {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .filter-panel-meta {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .filter-grid.members-filter-grid {
+    grid-template-columns: minmax(220px, 1fr) minmax(112px, 136px) minmax(136px, 160px);
+  }
+
+  .members-filter-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+
+  .sticky-toolbar-inner {
+    align-items: stretch;
+  }
+
+  .sticky-toolbar-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .sticky-toolbar-actions > * {
+    flex: 1 1 calc(50% - 8px);
+  }
+
+  .changelog-entry-card .ant-card-body {
+    padding: 14px 12px;
+  }
+
+  .login-card {
+    grid-template-columns: 1fr;
+    width: min(720px, 100%);
+    height: auto;
+    min-height: 0;
+  }
+
+  .login-hero,
+  .login-form-panel {
+    padding: 32px 24px;
+  }
+
+  .login-hero {
+    height: auto;
+    min-height: 560px;
+  }
+
+  .login-form-panel {
+    height: auto;
+    min-height: auto;
+  }
+
+  .graph-panel {
+    min-height: 0;
+  }
+
+  .graph-canvas-shell {
+    min-height: 460px;
+  }
+
+  .member-asset-toolbar-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .asset-library-card .ant-card-body {
+    min-height: auto;
+  }
+
+  .import-batch-record-actions > * {
+    flex: 1 1 calc(50% - 8px);
+  }
+
+  .mobile-stack {
+    display: flex;
+    flex-direction: column;
+  }
+}

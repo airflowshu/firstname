@@ -3,6 +3,7 @@
 import dayjs from 'dayjs';
 import { Alert, DatePicker, Form, Input, InputNumber, Modal, Select } from 'antd';
 import { useEffect } from 'react';
+import type { MemberMutationPayload } from '@/lib/api';
 import type { MemberDetail } from '@/lib/types';
 import { CemeteryMapPicker } from './cemetery-map-picker';
 
@@ -37,7 +38,7 @@ export function SupplementRequestModal({
   loading?: boolean;
   onCancel: () => void;
   onSubmit: (values: {
-    patch: Record<string, unknown>;
+    patch: MemberMutationPayload;
     reason?: string;
   }) => Promise<void> | void;
 }) {
@@ -101,6 +102,7 @@ export function SupplementRequestModal({
       confirmLoading={loading}
       okText="提交申请"
       cancelText="取消"
+      forceRender
       destroyOnHidden
       width={760}
     >
@@ -112,19 +114,33 @@ export function SupplementRequestModal({
             return;
           }
 
-          const patch: Record<string, unknown> = {};
-          const setIfChanged = (key: string, nextValue: unknown, currentValue: unknown) => {
+          const patch: MemberMutationPayload = {};
+          const setPatchValue = <Key extends keyof MemberMutationPayload>(
+            key: Key,
+            value: MemberMutationPayload[Key],
+          ) => {
+            patch[key] = value;
+          };
+          const setIfChanged = <Key extends keyof MemberMutationPayload>(
+            key: Key,
+            nextValue: MemberMutationPayload[Key],
+            currentValue: unknown,
+          ) => {
             if (nextValue === undefined || nextValue === null || nextValue === '') {
               return;
             }
 
             if (nextValue !== currentValue) {
-              patch[key] = nextValue;
+              setPatchValue(key, nextValue);
             }
           };
-          const setNullableIfChanged = (key: string, nextValue: unknown, currentValue: unknown) => {
+          const setNullableIfChanged = <Key extends keyof MemberMutationPayload>(
+            key: Key,
+            nextValue: MemberMutationPayload[Key],
+            currentValue: unknown,
+          ) => {
             if (JSON.stringify(nextValue ?? null) !== JSON.stringify(currentValue ?? null)) {
-              patch[key] = nextValue ?? null;
+              setPatchValue(key, (nextValue ?? null) as MemberMutationPayload[Key]);
             }
           };
 

@@ -47,13 +47,25 @@ import { CemeteryMapPreview } from '@/components/cemetery-map-preview';
 import { SupplementAssetRequestModal } from '@/components/supplement-asset-request-modal';
 import { SupplementRequestModal } from '@/components/supplement-request-modal';
 import { useAuth } from '@/components/auth-provider';
-import { api, ApiError } from '@/lib/api';
+import {
+  api,
+  ApiError,
+  type MarriageMutationPayload,
+  type MemberMutationPayload,
+  type QuickRelativePayload,
+} from '@/lib/api';
 import { formatDate, toAbsoluteAssetUrl } from '@/lib/format';
-import type { MemberAssetRecord, MemberDetail, MemberListItem, MemberTimelineEvent } from '@/lib/types';
+import type {
+  MarriageStatus,
+  MemberAssetRecord,
+  MemberDetail,
+  MemberListItem,
+  MemberTimelineEvent,
+} from '@/lib/types';
 
 const { Paragraph, Text, Title } = Typography;
 
-type QuickRelativeType = 'father' | 'mother' | 'spouse' | 'child' | 'sibling';
+type QuickRelativeType = QuickRelativePayload['relationType'];
 
 const memberEventTypeLabelMap: Record<MemberTimelineEvent['eventType'], string> = {
   BIRTH: '出生',
@@ -110,7 +122,7 @@ export default function MemberDetailPage() {
   const [editingMarriage, setEditingMarriage] = useState<{
     id: string;
     spouseName: string;
-    status: string;
+    status: MarriageStatus;
     startDate: string | null;
     endDate: string | null;
   } | null>(null);
@@ -210,8 +222,8 @@ export default function MemberDetailPage() {
       member?.cemeteryRemark,
   );
 
-  const saveMemberMutation = useMutation<unknown, Error, Record<string, unknown>>({
-    mutationFn: (payload: Record<string, unknown>) =>
+  const saveMemberMutation = useMutation<unknown, Error, MemberMutationPayload>({
+    mutationFn: (payload: MemberMutationPayload) =>
       isAdmin
         ? api.updateMember(memberId, payload)
         : api.createMemberUpdateRequest({ memberId, patch: payload }),
@@ -230,20 +242,8 @@ export default function MemberDetailPage() {
     },
   });
 
-  const quickRelativeMutation = useMutation<
-    unknown,
-    Error,
-    {
-      relationType: QuickRelativeType;
-      existingMemberId?: string;
-      member: Record<string, unknown>;
-    }
-  >({
-    mutationFn: async (payload: {
-      relationType: QuickRelativeType;
-      existingMemberId?: string;
-      member: Record<string, unknown>;
-    }) =>
+  const quickRelativeMutation = useMutation<unknown, Error, QuickRelativePayload>({
+    mutationFn: async (payload: QuickRelativePayload) =>
       isAdmin
         ? api.createQuickRelative(memberId, payload)
         : api.createQuickRelativeRequest({
@@ -279,8 +279,8 @@ export default function MemberDetailPage() {
     },
   });
 
-  const marriageMutation = useMutation<unknown, Error, Record<string, unknown>>({
-    mutationFn: (payload: Record<string, unknown>) => {
+  const marriageMutation = useMutation<unknown, Error, MarriageMutationPayload>({
+    mutationFn: (payload: MarriageMutationPayload) => {
       if (!isAdmin) {
         return api.createMarriageChangeRequest({
           memberId,
@@ -529,7 +529,7 @@ export default function MemberDetailPage() {
   });
 
   const supplementMutation = useMutation({
-    mutationFn: (payload: { patch: Record<string, unknown>; reason?: string }) =>
+    mutationFn: (payload: { patch: MemberMutationPayload; reason?: string }) =>
       api.createSupplementRequest({
         memberId,
         patch: payload.patch,

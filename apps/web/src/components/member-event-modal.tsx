@@ -53,6 +53,7 @@ export function MemberEventModal({
       confirmLoading={loading}
       okText="保存事件"
       cancelText="取消"
+      forceRender
       destroyOnHidden
       width={640}
     >

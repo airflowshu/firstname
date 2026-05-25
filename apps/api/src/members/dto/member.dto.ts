@@ -26,6 +26,26 @@ import {
 
 const MAX_MEMBER_ASSET_TAGS = 12;
 
+function transformOptionalBoolean(value: unknown) {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (String(value).toLowerCase() === 'true') {
+    return true;
+  }
+
+  if (String(value).toLowerCase() === 'false') {
+    return false;
+  }
+
+  return undefined;
+}
+
 function transformTagListInput(value: unknown) {
   if (value === undefined || value === null) {
     return undefined;
@@ -169,11 +189,34 @@ export class MemberQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(100)
   pageSize?: number = 10;
 
   @IsOptional()
   @IsString()
   keyword?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  generationName?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  birthYearFrom?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  birthYearTo?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  nativePlace?: string;
 
   @IsOptional()
   @IsEnum(Gender)
@@ -184,8 +227,24 @@ export class MemberQueryDto {
   lifeStatus?: LifeStatus;
 
   @IsOptional()
-  @Transform(({ value }) => value === 'true')
+  @Transform(({ value }) => transformOptionalBoolean(value))
+  hasPhoto?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => transformOptionalBoolean(value))
+  hasAssets?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => transformOptionalBoolean(value))
   includeDeleted?: boolean = false;
+
+  @IsOptional()
+  @IsIn(['name', 'birthDate', 'generationName', 'createdAt', 'updatedAt'])
+  sortBy?: 'name' | 'birthDate' | 'generationName' | 'createdAt' | 'updatedAt';
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortOrder?: 'asc' | 'desc';
 }
 
 export class CreateMarriageDto {

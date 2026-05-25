@@ -368,6 +368,7 @@ export function AssetImportWizardModal({
         setFileList([]);
         setCurrentStep(0);
       }}
+      forceRender
       destroyOnHidden
     >
       <Form form={form} layout="vertical">

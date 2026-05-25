@@ -1,0 +1,14 @@
+@media (max-width: 1199px) {
+  .filter-grid,
+  .filter-grid-compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .graph-panel {
+    min-height: 0;
+  }
+
+  .graph-canvas-shell {
+    min-height: 500px;
+  }
+}

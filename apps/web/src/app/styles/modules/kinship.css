@@ -1,0 +1,70 @@
+.member-select .ant-select-selector {
+  min-height: 40px;
+}
+
+.member-select .ant-select-selection-item {
+  font-weight: 500;
+}
+
+.member-select-option-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.member-select-option-name {
+  color: var(--text-primary);
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+
+.member-select-option-native {
+  color: var(--text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kinship-member-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-radius: 12px;
+  padding: 10px;
+  border: 1px solid var(--panel-border);
+}
+
+.kinship-member-side-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.kinship-member-side-left {
+  background: linear-gradient(135deg, var(--info-surface-blend-start), var(--surface-alpha-96));
+  border-color: var(--info-surface-border);
+}
+
+.kinship-member-side-left .kinship-member-side-title {
+  color: var(--info);
+}
+
+.kinship-member-side-right {
+  background: linear-gradient(135deg, var(--danger-surface-blend-start), var(--surface-alpha-96));
+  border-color: var(--danger-surface-border);
+}
+
+.kinship-member-side-right .kinship-member-side-title {
+  color: var(--danger);
+}
+
+.kinship-preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

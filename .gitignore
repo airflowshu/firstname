@@ -19,3 +19,4 @@ api-dev.out.log
 dev.log
 dev.err.log
 .codex-logs
+.claude

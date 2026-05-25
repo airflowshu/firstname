@@ -1,0 +1,273 @@
+@media (max-width: 767px) {
+  .filter-grid,
+  .filter-grid-compact {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-grid.members-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .members-filter-actions {
+    grid-column: auto;
+    justify-content: stretch;
+    flex-wrap: wrap;
+  }
+
+  .members-filter-actions .ant-btn {
+    flex: 1 1 calc(50% - 4px);
+  }
+
+  .sticky-toolbar {
+    top: 0;
+  }
+
+  .graph-panel {
+    height: 62vh;
+    min-height: 0;
+  }
+
+  .graph-canvas-shell {
+    height: 62vh;
+    min-height: 380px;
+  }
+
+  .graph-canvas-toolbar {
+    top: auto;
+    right: 8px;
+    bottom: 8px;
+    flex-direction: row;
+    transform: none;
+  }
+
+  .graph-canvas-toolbar .ant-btn {
+    flex: 0 0 auto;
+  }
+
+  .graph-canvas-legend {
+    left: 8px;
+    right: 8px;
+    bottom: 58px;
+    max-width: none;
+    gap: 8px;
+  }
+
+  .member-photo-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .member-photo-card .ant-image,
+  .member-photo-card .ant-image-img {
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  .member-parent-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .member-overview-pill {
+    flex: 1 1 calc(50% - 6px);
+  }
+
+  .filter-panel-meta {
+    align-items: stretch;
+  }
+
+  .filter-panel-meta .ant-segmented,
+  .filter-panel-meta .ant-btn,
+  .filter-panel-meta .ant-tag {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .mobile-list-actions > * {
+    flex-basis: 100%;
+  }
+
+  .import-batch-record-actions > * {
+    flex-basis: 100%;
+  }
+
+  .sticky-toolbar-actions > * {
+    flex-basis: 100%;
+  }
+
+  .asset-library-pagination-actions {
+    width: 100%;
+  }
+
+  .asset-library-pagination-actions > * {
+    flex: 1 1 100%;
+  }
+
+  .login-page {
+    padding: 12px;
+    align-items: flex-start;
+  }
+
+  .login-card {
+    border-radius: 18px;
+    max-width: calc(100vw - 24px);
+  }
+
+  .login-card::after {
+    inset: 8px;
+    border-radius: 12px;
+  }
+
+  .login-form-panel {
+    order: 1;
+    padding: 24px 18px;
+  }
+
+  .login-hero {
+    order: 2;
+    display: none;
+  }
+
+  .login-title {
+    max-width: 100%;
+    margin: 22px 0 14px;
+    font-size: 38px;
+    letter-spacing: 0.06em;
+    line-height: 1.18;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+  }
+
+  .login-title-line {
+    width: 6.36em;
+  }
+
+  .login-hero-desc {
+    font-size: 16px;
+    line-height: 1.7;
+  }
+
+  .family-badge {
+    max-width: 100%;
+    padding: 7px 14px;
+    font-size: 13px;
+    white-space: normal;
+  }
+
+  .login-feature-list {
+    gap: 12px;
+  }
+
+  .login-feature-card {
+    grid-template-columns: 48px 1fr;
+    gap: 12px;
+    min-height: 86px;
+    padding: 14px 16px;
+  }
+
+  .login-feature-icon {
+    width: 42px;
+    height: 42px;
+    font-size: 22px;
+  }
+
+  .login-feature-title {
+    font-size: 16px;
+  }
+
+  .login-feature-desc {
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .login-book {
+    right: -150px;
+    bottom: -42px;
+    width: 360px;
+    height: 210px;
+    opacity: 0.5;
+  }
+
+  .login-book-page {
+    width: 154px;
+    height: 164px;
+  }
+
+  .login-book-page-left {
+    right: 146px;
+  }
+
+  .login-book-page-right {
+    right: 18px;
+  }
+
+  .login-hero-seal {
+    right: -42px;
+    width: 150px;
+    height: 198px;
+  }
+
+  .login-hero-script {
+    right: 18px;
+    font-size: 24px;
+    opacity: 0.72;
+  }
+
+  .login-form-frame {
+    padding: 30px 18px 26px;
+  }
+
+  .login-form-heading {
+    margin-bottom: 22px;
+  }
+
+  .login-form-heading h2 {
+    font-size: 34px;
+  }
+
+  .login-demo-box {
+    grid-template-columns: 28px 1fr;
+    padding: 16px;
+  }
+
+  .login-demo-box p {
+    font-size: 13px;
+  }
+
+  .login-form-options {
+    align-items: flex-start;
+  }
+
+  .login-form-footer {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    text-align: center;
+  }
+
+  .login-form-footer span:first-child,
+  .login-form-footer span:last-child {
+    display: none;
+  }
+
+  .invite-page {
+    padding: 10px;
+    align-items: stretch;
+  }
+
+  .invite-card {
+    margin: auto 0;
+  }
+
+  .cemetery-map-canvas,
+  .cemetery-map-preview-canvas {
+    min-height: 220px;
+  }
+
+  .cemetery-map-meta-grid,
+  .cemetery-picker-status,
+  .member-overview-base-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cemetery-picker-status {
+    flex-direction: column;
+  }
+}

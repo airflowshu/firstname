@@ -649,6 +649,7 @@ export default function SupplementRequestsPage() {
           }}
           onOk={() => form.submit()}
           confirmLoading={reviewMutation.isPending}
+          forceRender
           destroyOnHidden
           width={820}
         >
