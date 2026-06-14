@@ -1,9 +1,16 @@
 node_modules
+**/node_modules
 .pnpm-store
+**/.pnpm-store
 .next
+**/.next
 dist
+**/dist
 coverage
+**/coverage
 uploads
+**/uploads
 .git
 .idea
 .vscode
+*.log
