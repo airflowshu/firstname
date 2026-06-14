@@ -15,8 +15,10 @@ docker compose up -d --build
 
 默认访问地址：
 
-- 统一入口：`http://localhost`
-- API 文档：`http://localhost/api/docs`
+- 统一入口：`http://<NAS_IP>:${NGINX_PORT:-18080}`
+- API 文档：`http://<NAS_IP>:${NGINX_PORT:-18080}/api/docs`
+
+> `postgres`/`api`/`web` 不再暴露宿主机端口，仅通过 `nginx` 统一对外。
 
 ## 2. 初始化数据库
 
@@ -70,5 +72,82 @@ cat backup.sql | docker compose exec -T postgres psql -U postgres -d fisrtname
 - 必须修改 `JWT_SECRET`
 - 建议将 PostgreSQL 密码与密钥改为强随机值
 - 建议把 `uploads` 挂载到专用数据盘
-- 建议开启 HTTPS，并在 Nginx 层补充证书配置
-- 如需独立域名，可把 `NEXT_PUBLIC_API_URL` 改成实际公网域名的 `/api`
+- 建议开启 HTTPS（Lucky 反代层申请证书）
+- `NEXT_PUBLIC_API_URL` 默认使用 `/api`，可直接配合 Nginx/Lucky 反向代理
+
+## 7. 飞牛 NAS + Lucky 反代
+
+### 7.1 环境变量（示例）
+
+在项目根目录创建 `.env`（或由飞牛 NAS Compose 面板注入）：
+
+```bash
+POSTGRES_PASSWORD=请改成强密码
+JWT_SECRET=请改成强随机字符串
+NODE_ENV=production
+NGINX_PORT=18080
+NEXT_PUBLIC_API_URL=/api
+CORS_ORIGIN=https://你的域名
+```
+
+### 7.2 启动与初始化
+
+```bash
+docker compose up -d --build
+docker compose exec api pnpm --filter @fisrtname/api prisma migrate deploy
+docker compose exec api pnpm --filter @fisrtname/api prisma db seed
+```
+
+### 7.3 Lucky 反向代理配置
+
+- 前端域名：`app.example.com`
+- 目标地址：`http://<NAS_IP>:18080`
+- 开启 WebSocket 转发
+- 开启 HTTPS，并在 Lucky 中签发/绑定证书
+
+### 7.4 路由建议
+
+- Lucky 在入口层只需代理到 Nginx
+- 业务路由由容器内 `deploy/nginx.conf` 处理：
+  - `/` -> `web:3000`
+  - `/api/` -> `api:3001`
+  - `/uploads/` -> `api:3001/uploads/`
+
+## 8. 低配 NAS 离线镜像部署（推荐）
+
+`docker-compose.yml` 已切换为 `image` 模式，默认镜像：
+
+- `API_IMAGE=fisrtname/api:1.0.0`
+- `WEB_IMAGE=fisrtname/web:1.0.0`
+
+### 8.1 在本机构建并导出镜像
+
+```bash
+docker build -f apps/api/Dockerfile -t fisrtname/api:1.0.0 .
+# 如果docker网络受限，加上代理配置即可    
+# docker build -f apps/api/Dockerfile -t fisrtname/api:1.0.0 --build-arg http_proxy=http://192.168.31.106:7897 --build-arg https_proxy=http://192.168.31.106:7897 .
+docker build -f apps/web/Dockerfile -t fisrtname/web:1.0.0 --build-arg NEXT_PUBLIC_API_URL=/api .
+docker save -o fisrtname-api-1.0.0.tar fisrtname/api:1.0.0
+docker save -o fisrtname-web-1.0.0.tar fisrtname/web:1.0.0
+```
+
+### 8.2 拷贝到 NAS 并导入
+
+```bash
+sudo docker load -i fisrtname-api-1.0.0.tar
+sudo docker load -i fisrtname-web-1.0.0.tar
+```
+ 此时docker images -a 中应该能看到对应的镜像
+
+### 8.3 在 NAS 启动（不构建）
+
+```bash
+docker compose up -d
+```
+
+首次部署仍需执行数据库初始化：
+
+```bash
+docker compose exec api pnpm --filter @fisrtname/api prisma migrate deploy
+docker compose exec api pnpm --filter @fisrtname/api prisma db seed
+```
