@@ -2,6 +2,15 @@
 
 一个基于 `Next.js + NestJS + PostgreSQL + Prisma` 的家族血亲管理系统，支持成员档案、血缘关系图谱、亲戚称呼计算、账号权限、操作日志、本地磁盘头像上传，以及 `super` 对演示家族的一键重置。
 
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/2e0a3810-9d5a-4832-b441-0cc620f98efb" />
+<img width="1920" height="945" alt="image" src="https://github.com/user-attachments/assets/2f3abd6d-b882-45ff-9226-a70486fc177b" />
+<img width="1920" height="945" alt="image" src="https://github.com/user-attachments/assets/3afc2003-ac61-47af-bffd-2870e85363ff" />
+<img width="1920" height="945" alt="image" src="https://github.com/user-attachments/assets/4ec886a9-16e7-454d-98a3-0207cba5a248" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/807c6efc-36a5-4f06-b21a-80a2d5b573c7" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/133855df-fb02-4cc9-94db-7a38d59443db" />
+
+
+
 ## 技术栈
 
 - 前端：`Next.js 16`、`React 19`、`Ant Design`、`AntV G6`、`React Query`
