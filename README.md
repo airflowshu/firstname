@@ -2,8 +2,8 @@
 
 一个基于 `Next.js + NestJS + PostgreSQL + Prisma` 的家族血亲管理系统，支持成员档案、血缘关系图谱、亲戚称呼计算、账号权限、操作日志、本地磁盘头像上传，以及 `super` 对演示家族的一键重置。
 
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/2e0a3810-9d5a-4832-b441-0cc620f98efb" />
 <img width="1920" height="945" alt="image" src="https://github.com/user-attachments/assets/2f3abd6d-b882-45ff-9226-a70486fc177b" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/2e0a3810-9d5a-4832-b441-0cc620f98efb" />
 <img width="1920" height="945" alt="image" src="https://github.com/user-attachments/assets/3afc2003-ac61-47af-bffd-2870e85363ff" />
 <img width="1920" height="945" alt="image" src="https://github.com/user-attachments/assets/4ec886a9-16e7-454d-98a3-0207cba5a248" />
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/807c6efc-36a5-4f06-b21a-80a2d5b573c7" />
@@ -163,3 +163,12 @@ pnpm dev
 ## Docker 部署
 
 见 `docs/deployment.md`
+
+
+## 开源协议与商业授权说明 (License & Commercial Use)
+
+1. 本项目采用 **AGPL-3.0** 开源协议。这意味着您可以自由地使用、修改和分发本项目的代码。
+2. **请商业用户特别注意：** 根据 AGPL-3.0 协议的要求，如果您在任何商业产品、云服务（SaaS）或公司内部系统中使用了本项目（或基于本项目进行了二次开发），**您必须向公众无偿开源您整个产品的完整源代码**。
+3. 如果您无法接受将您自己的商业项目彻底开源，请勿将本项目用于商业行为。
+4. 如需获得免除开源传染的**商业闭源授权**，请联系作者进行商务洽谈：[shull900627@gmail.com]。
+
