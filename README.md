@@ -3,6 +3,8 @@
 一个基于 `Next.js + NestJS + PostgreSQL + Prisma` 的家族血亲管理系统，支持成员档案、血缘关系图谱、亲戚称呼计算、账号权限、操作日志、本地磁盘头像上传，以及 `super` 对演示家族的一键重置。
 欢迎大家提交ISSUE，本人将在工作之余尽快回复，共同推进，将本开源项目做好做精！喜欢的别忘了star一下，感谢！
 
+- [在线演示](https://jiazu.9527789.xyz:4433/)
+
 <img width="1920" height="945" alt="image" src="https://github.com/user-attachments/assets/2f3abd6d-b882-45ff-9226-a70486fc177b" />
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/2e0a3810-9d5a-4832-b441-0cc620f98efb" />
 <img width="1920" height="945" alt="image" src="https://github.com/user-attachments/assets/3afc2003-ac61-47af-bffd-2870e85363ff" />
